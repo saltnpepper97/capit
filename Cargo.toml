@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "crates/capit-core",
+    "crates/capit-ipc",
+    "crates/capitd",
+    "crates/capit",
+]
+
+resolver = "2"

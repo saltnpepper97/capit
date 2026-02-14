@@ -1,0 +1,15 @@
+[package]
+name = "capit-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+
+# Only needed by the CLI crate (capit) for parsing enums like Mode.
+clap = { version = "4.5.58", features = ["derive"], optional = true }
+
+[features]
+# Enable clap derives in types when the CLI depends on capit-core.
+clap = ["dep:clap"]
