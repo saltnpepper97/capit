@@ -50,8 +50,17 @@ pub fn run(args: Args) -> Result<(), String> {
 
                 Cmd::Region { output } => {
                     let target = cli::target_from_output_name(output);
-                    let _ = capture::start_capture(&mut client, Mode::Region, target, false)?;
-                    Ok(())
+
+                    match capture::start_capture(&mut client, Mode::Region, target, false)? {
+                        capture::CaptureOutcome::Finished { path } => {
+                            println!("saved to: {path}");
+                            Ok(())
+                        }
+                        capture::CaptureOutcome::Cancelled => {
+                            info!("capture cancelled");
+                            Ok(())
+                        }
+                    }
                 }
 
                 Cmd::Screen { output } => {
@@ -59,14 +68,29 @@ pub fn run(args: Args) -> Result<(), String> {
                         Some(name) => Some(Target::OutputName(name)),
                         None => Some(Target::AllScreens),
                     };
-                    let _ = capture::start_capture(&mut client, Mode::Screen, target, false)?;
-                    Ok(())
+
+                    match capture::start_capture(&mut client, Mode::Screen, target, false)? {
+                        capture::CaptureOutcome::Finished { path } => {
+                            println!("saved to: {path}");
+                            Ok(())
+                        }
+                        capture::CaptureOutcome::Cancelled => {
+                            info!("capture cancelled");
+                            Ok(())
+                        }
+                    }
                 }
 
-                Cmd::Window => {
-                    let _ = capture::start_capture(&mut client, Mode::Window, None, false)?;
-                    Ok(())
-                }
+                Cmd::Window => match capture::start_capture(&mut client, Mode::Window, None, false)? {
+                    capture::CaptureOutcome::Finished { path } => {
+                        println!("saved to: {path}");
+                        Ok(())
+                    }
+                    capture::CaptureOutcome::Cancelled => {
+                        info!("capture cancelled");
+                        Ok(())
+                    }
+                },
 
                 Cmd::Bar { .. } => unreachable!(),
             }
@@ -126,7 +150,7 @@ fn run_bar_loop(socket: &Path) -> Result<(), String> {
 
         match capture::start_capture(&mut client, mode, target, false)? {
             capture::CaptureOutcome::Finished { path } => {
-                println!("{path}");
+                println!("saved to: {path}");
                 return Ok(());
             }
             capture::CaptureOutcome::Cancelled => {

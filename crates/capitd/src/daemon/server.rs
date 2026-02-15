@@ -16,9 +16,7 @@ use std::os::unix::fs::FileTypeExt;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 
-fn try_acquire_single_instance_lock(
-    lock_path: &Path,
-) -> std::io::Result<Option<std::fs::File>> {
+fn try_acquire_single_instance_lock(lock_path: &Path) -> std::io::Result<Option<std::fs::File>> {
     let f = OpenOptions::new()
         .create(true)
         .read(true)
@@ -57,6 +55,21 @@ fn cleanup_stale_socket(sock: &Path) -> std::io::Result<()> {
 
 fn lock_path_for_socket(sock: &Path) -> PathBuf {
     sock.with_extension("lock")
+}
+
+fn capit_dir_for_log() -> String {
+    // Match output_dir_from_cfg() semantics: treat empty as "not set".
+    match std::env::var_os("CAPIT_DIR") {
+        None => "(not set)".to_string(),
+        Some(v) => {
+            let p = PathBuf::from(v);
+            if p.as_os_str().is_empty() {
+                "(not set)".to_string()
+            } else {
+                p.display().to_string()
+            }
+        }
+    }
 }
 
 pub fn run(verbose: bool) -> Result<()> {
@@ -126,11 +139,8 @@ pub fn run(verbose: bool) -> Result<()> {
         warn!("failed to create output dir '{}': {e}", out_dir.display());
     }
 
-    let cap_dir_env = std::env::var_os("CAPIT_DIR")
-        .map(|v| v.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "(not set)".to_string());
-
-    info!("CAPIT_DIR={}", cap_dir_env);
+    info!("CAPIT_DIR={}", capit_dir_for_log());
+    info!("config screenshot_directory={}", state.cfg.screenshot_directory.display());
     info!("output dir={}", out_dir.display());
 
     let server = IpcServer::bind(&sock)?;
