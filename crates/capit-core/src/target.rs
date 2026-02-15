@@ -13,4 +13,12 @@ pub enum Target {
 
     /// Fallback when name isn't known; index is whatever the daemon reports.
     OutputIndex(u32),
+
+    /// The currently active/focused toplevel window.
+    ///
+    /// Notes:
+    /// - This is intentionally abstract; on Wayland we may implement it via
+    ///   compositor/portal interaction (focus, window picker, etc).
+    /// - It avoids needing stable window IDs up-front.
+    ActiveWindow,
 }

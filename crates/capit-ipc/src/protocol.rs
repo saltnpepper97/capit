@@ -2,9 +2,10 @@
 // License: MIT
 
 use serde::{Deserialize, Serialize};
-use capit_core::{Mode, Target, OutputInfo, Rect};
 
-pub const IPC_VERSION: u32 = 2;
+use capit_core::{Mode, OutputInfo, Rect, Target};
+
+pub const IPC_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Wire {
@@ -17,12 +18,37 @@ pub struct IpcHello {
     pub version: u32,
 }
 
+/// Theme preference for the UI.
+/// `Auto` means "match system/desktop preference" (handled client-side).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum UiTheme {
+    Auto,
+    Dark,
+    Light,
+}
+
+/// UI-related config that the daemon can provide to clients (CLI/bar).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct UiConfig {
+    /// Desired theme behavior (auto/dark/light).
+    pub theme: UiTheme,
+
+    /// Accent colour in ARGB (0xAARRGGBB).
+    pub accent_colour: u32,
+
+    pub bar_background_colour: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Request {
     Hello(IpcHello),
 
     /// Query current outputs (monitors) and their layout in global space.
     ListOutputs,
+
+    /// Ask daemon for UI config (theme + accent colour).
+    /// CLI/bar uses this to decide bar styling.
+    GetUiConfig,
 
     StartCapture {
         mode: Mode,
@@ -51,6 +77,9 @@ pub enum Response {
 
     /// Response to ListOutputs.
     Outputs { outputs: Vec<OutputInfo> },
+
+    /// Response to GetUiConfig.
+    UiConfig { cfg: UiConfig },
 
     Status {
         running: bool,

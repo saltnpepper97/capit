@@ -1,0 +1,7 @@
+@ Author: Dustin Pilgrim
+@ Description: A solution to you wayland screen capturing problems
+
+capit:
+  screenshot_directory "$env.HOME/pictures/screenshots/"
+  bar_background_colour "#111111"
+end

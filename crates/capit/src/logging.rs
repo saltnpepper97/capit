@@ -8,16 +8,15 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 use eventline::runtime::{self, LogLevel};
 
+use crate::paths::ensure_parent_dir;
+
 pub fn init_logging(log_path: &Path, verbose: bool) -> Result<(), String> {
-    if let Some(parent) = log_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("create log dir: {e}"))?;
-    }
+    ensure_parent_dir(log_path).map_err(|e| format!("create log dir: {e}"))?;
 
     block_on(runtime::init());
 
     runtime::enable_file_output(log_path).map_err(|e| format!("enable file output: {e}"))?;
 
-    // CRITICAL FIX: Only call enable_console_output if verbose is true
     if verbose {
         runtime::enable_console_output(true);
         runtime::enable_console_color(true);

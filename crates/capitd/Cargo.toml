@@ -8,14 +8,17 @@ capit-core = { path = "../capit-core" }
 capit-ipc  = { path = "../capit-ipc" }
 
 async-io = "2.6.0"
+clap = { version = "4.5.58", features = ["derive"] }
 eventline = "0.6.1"
 futures-util = "0.3.31"
 image = "0.25.9"
 memmap2 = "0.9.9"
+rune-cfg = "0.4.2"
 smithay-client-toolkit = "0.20.0"
 tempfile = "3.25.0"
+url = "2.5.8"
+wayland-cursor = "0.31.12"
 wayland-client = "0.31.12"
-wayland-protocols = { version = "0.32.10", features = ["client"] }
 wayland-protocols-wlr = { version = "0.3.10", features = ["client"] }
 zbus = { version = "5.13.2", features = ["blocking"] }
 zvariant = "5.9.2"
