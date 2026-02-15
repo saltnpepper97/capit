@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use capit_core::{Mode, Target};
-use capit_ipc::{IpcClient, Request, Response};
+use capit_ipc::{Request, Response};
 use capit_ipc::protocol::UiConfig;
 
 use eventline::{debug, error, info};
@@ -91,15 +91,14 @@ fn run_bar_loop(socket: &Path) -> Result<(), String> {
     let ui = match fetch_ui_config(socket) {
         Ok(cfg) => {
             info!(
-                "bar ui config: theme={:?} accent=0x{:08X} bg=0x{:08X}",
-                cfg.theme, cfg.accent_colour, cfg.bar_background_colour
+                "bar ui config: accent=0x{:08X} bg=0x{:08X}",
+                cfg.accent_colour, cfg.bar_background_colour
             );
             cfg
         }
         Err(e) => {
             eventline::warn!("failed to fetch ui config from daemon: {e}");
             UiConfig {
-                theme: capit_ipc::protocol::UiTheme::Auto,
                 accent_colour: 0xFF0A_84FF,
                 bar_background_colour: 0xFF0F_1115,
             }

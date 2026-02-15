@@ -87,7 +87,7 @@ fn main() {
         eventline::warn!("failed to create output dir '{}': {e}", out_dir.display());
     }
 
-    if let Err(e) = daemon::run() {
+    if let Err(e) = daemon::run(args.verbose) {
         // Keep it eventline-only, then exit.
         eventline::error!("fatal error: {e}");
         std::process::exit(1);

@@ -20,7 +20,6 @@ pub fn print_response(resp: Response) {
         Response::Outputs { outputs } => println!("outputs: {}", outputs.len()),
 
         Response::UiConfig { cfg } => {
-            println!("theme: {:?}", cfg.theme);
             println!("accent_colour: 0x{:08X}", cfg.accent_colour);
             println!("bar_background_colour: 0x{:08X}", cfg.bar_background_colour);
         }

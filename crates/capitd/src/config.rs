@@ -7,17 +7,9 @@ use std::path::{Path, PathBuf};
 use eventline::warn;
 use rune_cfg::RuneConfig;
 
-#[derive(Debug, Clone, Copy)]
-pub enum Theme {
-    Auto,
-    Dark,
-    Light,
-}
-
 #[derive(Debug, Clone)]
 pub struct CapitConfig {
     pub screenshot_directory: PathBuf,
-    pub theme: Theme,
     pub accent_colour: u32,          // ARGB
     pub bar_background_colour: u32,  // ARGB
 }
@@ -26,7 +18,6 @@ impl Default for CapitConfig {
     fn default() -> Self {
         Self {
             screenshot_directory: default_screenshot_dir(),
-            theme: Theme::Auto,
             accent_colour: 0xFF0A_84FF,          // default blue
             bar_background_colour: 0xFF0F_1115,  // matches bar default
         }
@@ -87,24 +78,6 @@ fn parse_config(rc: &RuneConfig) -> CapitConfig {
         }
         Ok(None) => {}
         Err(e) => warn!("config: invalid capit.screenshot_directory ({e}); using default {}", cfg.screenshot_directory.display()),
-    }
-
-    // theme
-    match rc.get_optional::<String>("capit.theme") {
-        Ok(Some(theme_str)) => {
-            let t = theme_str.trim().to_lowercase();
-            cfg.theme = match t.as_str() {
-                "auto" => Theme::Auto,
-                "dark" => Theme::Dark,
-                "light" => Theme::Light,
-                other => {
-                    warn!("config: invalid capit.theme '{other}'; expected auto|dark|light; using default");
-                    cfg.theme
-                }
-            };
-        }
-        Ok(None) => {}
-        Err(e) => warn!("config: invalid capit.theme ({e}); using default"),
     }
 
     // accent_colour

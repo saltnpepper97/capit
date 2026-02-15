@@ -18,21 +18,9 @@ pub struct IpcHello {
     pub version: u32,
 }
 
-/// Theme preference for the UI.
-/// `Auto` means "match system/desktop preference" (handled client-side).
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum UiTheme {
-    Auto,
-    Dark,
-    Light,
-}
-
 /// UI-related config that the daemon can provide to clients (CLI/bar).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct UiConfig {
-    /// Desired theme behavior (auto/dark/light).
-    pub theme: UiTheme,
-
     /// Accent colour in ARGB (0xAARRGGBB).
     pub accent_colour: u32,
 
