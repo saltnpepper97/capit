@@ -7,7 +7,7 @@ use capit_ipc::{Event, Request, Response};
 use eventline::{debug, error, info, warn};
 
 use crate::{
-    capture, overlay_region, overlay_screen, portal_window, selection::SelectionState,
+    capture, overlay_region, overlay_screen, selection::SelectionState,
 };
 
 use super::paths::default_output_path;
@@ -43,7 +43,21 @@ pub fn handle_request(
 
             Mode::Screen => handle_screen_overlay_capture(state, conn, target),
 
-            Mode::Window => handle_window_portal_capture(state, conn),
+            Mode::Window => {
+                state.active_job = Some(Mode::Window);
+                let _ = conn.send_event(Event::CaptureStarted { mode: Mode::Window });
+
+                let msg = String::from(
+                    "window capture is not implemented yet.\n\
+                     planned backends: sway (ipc tree), hyprland (hyprctl), niri (ipc).",
+                );
+
+                warn!("{msg}");
+                let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+
+                state.active_job = None;
+                Response::Error { message: msg }
+            }
 
             Mode::Record => Response::Error { message: "record not implemented yet".into() },
         };
@@ -239,33 +253,6 @@ fn handle_screen_overlay_capture(
         }
         Err(msg) => {
             error!("capture failed: {}", msg);
-            let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
-            state.active_job = None;
-            Response::Error { message: msg }
-        }
-    }
-}
-
-fn handle_window_portal_capture(
-    state: &mut DaemonState,
-    conn: &mut capit_ipc::ClientConn,
-) -> Response {
-    state.active_job = Some(Mode::Window);
-    let _ = conn.send_event(Event::CaptureStarted { mode: Mode::Window });
-
-    match portal_window::select_window_pipewire_stream() {
-        Ok(sel) => {
-            let msg = format!(
-                "window selected via portal (node_id={}), but PipeWire capture/PNG encoding is not implemented yet",
-                sel.node_id
-            );
-            warn!("{msg}");
-            let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
-            state.active_job = None;
-            Response::Error { message: msg }
-        }
-        Err(msg) => {
-            error!("window portal error: {}", msg);
             let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
             state.active_job = None;
             Response::Error { message: msg }

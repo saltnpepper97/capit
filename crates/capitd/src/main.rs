@@ -5,7 +5,6 @@ mod capture;
 mod config;
 mod overlay_region;
 mod overlay_screen;
-mod portal_window;
 mod selection;
 mod wayland_outputs;
 mod daemon;
