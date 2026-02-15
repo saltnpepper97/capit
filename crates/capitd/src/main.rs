@@ -27,8 +27,6 @@ struct Args {
 }
 
 fn effective_output_dir() -> PathBuf {
-    // Keep this logic identical to daemon.rs's output_dir_from_cfg() helper.
-    //
     // Priority:
     // 1) $CAPIT_DIR (if set and non-empty)
     // 2) config capit.screenshot_directory (if set/non-empty)
@@ -55,50 +53,43 @@ fn effective_output_dir() -> PathBuf {
 }
 
 fn main() {
-    // Parse args FIRST
     let args = Args::parse();
-
-    // Diagnostic: confirm what we parsed
-    eprintln!("capitd: args parsed - verbose={:?}", args.verbose);
 
     let log_path = args
         .log_file
         .unwrap_or_else(|| daemon::default_log_path("capitd.log"));
 
-    // Diagnostic: show what we're about to do
-    eprintln!("capitd: log_path={}", log_path.display());
-    eprintln!("capitd: calling init_logging with verbose={}", args.verbose);
-
+    // Init logging FIRST. This decides whether console is on.
+    // NOTE: logging::init_logging must explicitly disable console when verbose=false:
+    //   runtime::enable_console_output(verbose);
+    //   runtime::enable_console_color(verbose);
     if let Err(e) = logging::init_logging(&log_path, args.verbose) {
-        eprintln!("capitd: FAILED to init logging: {e}");
+        // At this point logging may not be initialized; last-resort stderr is acceptable.
+        // If you truly want "never stderr", you can just exit(1) silently here.
+        eprintln!("capitd: failed to init logging: {e}");
         std::process::exit(1);
     }
 
-    eprintln!("capitd: logging initialized successfully");
+    // From here on: eventline only.
+    eventline::info!("capitd starting");
+    eventline::debug!("verbose={}", args.verbose);
+    eventline::debug!("log_path={}", log_path.display());
 
-    // Log CAPIT_DIR + effective directory once (daemon can still validate too if you want)
     let cap_dir_env = std::env::var_os("CAPIT_DIR")
         .map(|v| v.to_string_lossy().into_owned())
         .unwrap_or_else(|| "(not set)".to_string());
+    eventline::info!("CAPIT_DIR={}", cap_dir_env);
 
     let out_dir = effective_output_dir();
-    eventline::info!("CAPIT_DIR={}", cap_dir_env);
     eventline::info!("output dir={}", out_dir.display());
 
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
-        // Non-fatal for now: daemon will still attempt saves and may fallback
-        eventline::warn!(
-            "failed to create output dir '{}': {e}",
-            out_dir.display()
-        );
+        eventline::warn!("failed to create output dir '{}': {e}", out_dir.display());
     }
 
-    eventline::info!("===== CAPITD STARTING =====");
-    eventline::debug!("verbose={}", args.verbose);
-
     if let Err(e) = daemon::run() {
+        // Keep it eventline-only, then exit.
         eventline::error!("fatal error: {e}");
-        eprintln!("capitd: {e}");
         std::process::exit(1);
     }
 }

@@ -17,13 +17,15 @@ pub fn init_logging(log_path: &Path, verbose: bool) -> Result<(), String> {
 
     runtime::enable_file_output(log_path).map_err(|e| format!("enable file output: {e}"))?;
 
+    // IMPORTANT: force the runtime's console sink to match our flag
+    runtime::enable_console_output(verbose);
+    runtime::enable_console_color(verbose);
+
+    runtime::set_log_level(if verbose { LogLevel::Debug } else { LogLevel::Info });
+
+    // Optional: if you want this, keep it—but it prints even if console logging is off
     if verbose {
-        runtime::enable_console_output(true);
-        runtime::enable_console_color(true);
-        runtime::set_log_level(LogLevel::Debug);
         eprintln!("eventline: console logging enabled (debug level)");
-    } else {
-        runtime::set_log_level(LogLevel::Info);
     }
 
     Ok(())

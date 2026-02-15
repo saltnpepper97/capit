@@ -17,15 +17,24 @@ pub fn init_logging(log_path: &Path, verbose: bool) -> Result<(), String> {
 
     runtime::enable_file_output(log_path).map_err(|e| format!("enable file output: {e}"))?;
 
-    // CRITICAL FIX: Only call enable_console_output if verbose is true
+    // Explicitly control console output.
+    runtime::enable_console_output(verbose);
+    runtime::enable_console_color(verbose);
+
     if verbose {
-        runtime::enable_console_output(true);
-        runtime::enable_console_color(true);
         runtime::set_log_level(LogLevel::Debug);
-        eprintln!("eventline: console logging enabled (debug level)");
     } else {
         runtime::set_log_level(LogLevel::Info);
     }
+
+    // Optional: log after init so it respects the console setting.
+    // (When verbose=false, this goes to file only.)
+    eventline::debug!(
+        "logging initialized: console={} level={:?} file={}",
+        verbose,
+        if verbose { LogLevel::Debug } else { LogLevel::Info },
+        log_path.display()
+    );
 
     Ok(())
 }
