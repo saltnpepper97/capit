@@ -454,6 +454,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "capit-bar"
+version = "0.1.0"
+dependencies = [
+ "capit-core",
+ "capit-ipc",
+ "eventline",
+ "memmap2",
+ "once_cell",
+ "resvg",
+ "smithay-client-toolkit",
+ "tempfile",
+ "tiny-skia",
+ "usvg",
+ "wayland-client",
+ "wayland-cursor",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "capit-core"
 version = "0.1.0"
 dependencies = [

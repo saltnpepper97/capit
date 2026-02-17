@@ -46,6 +46,11 @@ impl IpcServer {
     pub fn socket_path(&self) -> &Path {
         &self.socket_path
     }
+
+    pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
+        self.listener.set_nonblocking(nonblocking)?;
+        Ok(())
+    }
 }
 
 impl ClientConn {

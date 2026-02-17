@@ -11,7 +11,8 @@ use smithay_client_toolkit::{
 
 use wayland_client::{
     protocol::{
-        wl_buffer, wl_compositor, wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_shm_pool, wl_surface,
+        wl_buffer, wl_compositor, wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_shm_pool,
+        wl_surface,
     },
     Connection, Dispatch, QueueHandle, WEnum, Proxy,
 };
@@ -26,8 +27,19 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
 use super::surfaces::OutputSurface;
 
 const BTN_LEFT: u32 = 272;
+const BTN_MIDDLE: u32 = 274;
+
 const KEY_ESC: u32 = 1;
 const KEY_ENTER: u32 = 28;
+
+// evdev key codes
+const KEY_LEFT: u32 = 105;
+const KEY_RIGHT: u32 = 106;
+const KEY_UP: u32 = 103;
+const KEY_DOWN: u32 = 108;
+
+const KEY_LEFTSHIFT: u32 = 42;
+const KEY_RIGHTSHIFT: u32 = 54;
 
 pub struct App {
     pub registry_state: RegistryState,
@@ -54,6 +66,9 @@ pub struct App {
 
     pub pending_redraw: bool,
     pub result: Option<Option<Target>>,
+
+    // keyboard state
+    pub shift_down: bool,
 }
 
 impl App {
@@ -82,6 +97,7 @@ impl App {
             cursor_name: "left_ptr",
             pending_redraw: true,
             result: None,
+            shift_down: false,
         }
     }
 
@@ -134,6 +150,30 @@ impl App {
         self.result = Some(Some(Target::OutputName(name)));
     }
 
+    fn ensure_hovered(&mut self) {
+        if self.hovered_output_idx.is_none() && !self.outputs.is_empty() {
+            self.hovered_output_idx = Some(0);
+        }
+    }
+
+    fn cycle_hover(&mut self, dir: i32) {
+        if self.outputs.is_empty() {
+            self.hovered_output_idx = None;
+            return;
+        }
+
+        self.ensure_hovered();
+
+        let cur = self.hovered_output_idx.unwrap_or(0);
+        let n = self.outputs.len() as i32;
+
+        let mut next = cur as i32 + dir;
+        if next < 0 { next = n - 1; }
+        if next >= n { next = 0; }
+
+        self.hovered_output_idx = Some(next as usize);
+    }
+
     pub fn request_redraw(&mut self) {
         let any_busy = self.output_surfaces.iter().any(|os| os.shm_buf.as_ref().map_or(false, |b| b.busy));
         if any_busy {
@@ -172,11 +212,9 @@ impl Dispatch<wl_shm_pool::WlShmPool, ()> for App {
         _: &(),
         _: &wayland_client::Connection,
         _: &wayland_client::QueueHandle<Self>,
-    ) {
-    }
+    ) {}
 }
 
-// Dispatch impls (same as yours but delegate to surfaces helpers)
 impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for App {
     fn event(
         state: &mut Self,
@@ -200,16 +238,32 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for App {
 }
 
 impl Dispatch<wl_pointer::WlPointer, ()> for App {
-    fn event(state: &mut Self, pointer: &wl_pointer::WlPointer, event: wl_pointer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        pointer: &wl_pointer::WlPointer,
+        event: wl_pointer::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         match event {
             wl_pointer::Event::Enter { serial, surface, .. } => {
                 state.set_cursor_image(pointer, serial);
 
-                if let Some((idx, os)) = state.output_surfaces.iter().enumerate().find(|(_, os)| os.surface.id() == surface.id()) {
+                if let Some((idx, os)) = state
+                    .output_surfaces
+                    .iter()
+                    .enumerate()
+                    .find(|(_, os)| os.surface.id() == surface.id())
+                {
                     state.current_surface_idx = Some(idx);
 
                     if let Some(name) = os.output_info.name.as_ref() {
-                        if let Some(oi) = state.outputs.iter().position(|o| o.name.as_ref() == Some(name)) {
+                        if let Some(oi) = state
+                            .outputs
+                            .iter()
+                            .position(|o| o.name.as_ref() == Some(name))
+                        {
                             state.hovered_output_idx = Some(oi);
                         }
                     }
@@ -217,10 +271,80 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
                     state.request_redraw();
                 }
             }
+
             wl_pointer::Event::Button { button, state: btn_state, .. } => {
-                if button != BTN_LEFT { return; }
-                if btn_state == WEnum::Value(wl_pointer::ButtonState::Pressed) {
+                if btn_state != WEnum::Value(wl_pointer::ButtonState::Pressed) {
+                    return;
+                }
+
+                if button == BTN_LEFT {
+                    state.ensure_hovered();
                     state.confirm_hovered();
+                } else if button == BTN_MIDDLE {
+                    state.confirm_all();
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
+    fn event(
+        state: &mut Self,
+        _: &wl_keyboard::WlKeyboard,
+        event: wl_keyboard::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_keyboard::Event::Key { key, state: key_state, .. } => {
+                // Track shift state (no keymap needed)
+                match key_state {
+                    WEnum::Value(wl_keyboard::KeyState::Pressed) => {
+                        if key == KEY_LEFTSHIFT || key == KEY_RIGHTSHIFT {
+                            state.shift_down = true;
+                            return;
+                        }
+                    }
+                    WEnum::Value(wl_keyboard::KeyState::Released) => {
+                        if key == KEY_LEFTSHIFT || key == KEY_RIGHTSHIFT {
+                            state.shift_down = false;
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+
+                if key_state != WEnum::Value(wl_keyboard::KeyState::Pressed) {
+                    return;
+                }
+
+                if key == KEY_ESC {
+                    state.cancel();
+                    return;
+                }
+
+                match key {
+                    KEY_LEFT | KEY_UP => {
+                        state.cycle_hover(-1);
+                        state.request_redraw();
+                    }
+                    KEY_RIGHT | KEY_DOWN => {
+                        state.cycle_hover(1);
+                        state.request_redraw();
+                    }
+                    KEY_ENTER => {
+                        state.ensure_hovered();
+                        if state.shift_down {
+                            state.confirm_all();
+                        } else {
+                            state.confirm_hovered();
+                        }
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -228,21 +352,15 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
     }
 }
 
-impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
-    fn event(state: &mut Self, _: &wl_keyboard::WlKeyboard, event: wl_keyboard::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
-        match event {
-            wl_keyboard::Event::Key { key, state: key_state, .. } => {
-                if key_state != WEnum::Value(wl_keyboard::KeyState::Pressed) { return; }
-                if key == KEY_ESC { state.cancel(); }
-                else if key == KEY_ENTER { state.confirm_all(); }
-            }
-            _ => {}
-        }
-    }
-}
-
 impl Dispatch<wl_buffer::WlBuffer, ()> for App {
-    fn event(state: &mut Self, buffer: &wl_buffer::WlBuffer, event: wl_buffer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        buffer: &wl_buffer::WlBuffer,
+        event: wl_buffer::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         if let wl_buffer::Event::Release = event {
             super::surfaces::handle_buffer_release(state, buffer);
             if state.pending_redraw {
@@ -253,17 +371,35 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for App {
 }
 
 // empty dispatch impls you already have:
-impl Dispatch<wl_compositor::WlCompositor, ()> for App { fn event(_: &mut Self, _: &wl_compositor::WlCompositor, _: wl_compositor::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {} }
-impl Dispatch<wl_shm::WlShm, ()> for App { fn event(_: &mut Self, _: &wl_shm::WlShm, _: wl_shm::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {} }
-impl Dispatch<wl_surface::WlSurface, ()> for App { fn event(_: &mut Self, _: &wl_surface::WlSurface, _: wl_surface::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {} }
-impl Dispatch<zwlr_layer_shell_v1::ZwlrLayerShellV1, ()> for App { fn event(_: &mut Self, _: &zwlr_layer_shell_v1::ZwlrLayerShellV1, _: zwlr_layer_shell_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {} }
+impl Dispatch<wl_compositor::WlCompositor, ()> for App {
+    fn event(_: &mut Self, _: &wl_compositor::WlCompositor, _: wl_compositor::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+}
+impl Dispatch<wl_shm::WlShm, ()> for App {
+    fn event(_: &mut Self, _: &wl_shm::WlShm, _: wl_shm::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+}
+impl Dispatch<wl_surface::WlSurface, ()> for App {
+    fn event(_: &mut Self, _: &wl_surface::WlSurface, _: wl_surface::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+}
+impl Dispatch<zwlr_layer_shell_v1::ZwlrLayerShellV1, ()> for App {
+    fn event(_: &mut Self, _: &zwlr_layer_shell_v1::ZwlrLayerShellV1, _: zwlr_layer_shell_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+}
 
 impl Dispatch<wl_seat::WlSeat, ()> for App {
-    fn event(state: &mut Self, seat: &wl_seat::WlSeat, event: wl_seat::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        seat: &wl_seat::WlSeat,
+        event: wl_seat::Event,
+        _: &(),
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
         if let wl_seat::Event::Capabilities { capabilities } = event {
             if let WEnum::Value(caps) = capabilities {
                 if caps.contains(wl_seat::Capability::Pointer) && state.pointer.is_none() {
                     state.pointer = Some(seat.get_pointer(qh, ()));
+                    if let Err(e) = state.init_cursor(conn, qh) {
+                        eprintln!("Failed to init cursor: {}", e);
+                    }
                 }
                 if caps.contains(wl_seat::Capability::Keyboard) && state.keyboard.is_none() {
                     state.keyboard = Some(seat.get_keyboard(qh, ()));

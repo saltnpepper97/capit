@@ -1,11 +1,11 @@
 // Author: Dustin Pilgrim
 // License: MIT
 
+pub mod app;
+pub mod icons;
+pub mod pixels;
+pub mod render;
 pub mod run;
-mod app;
-mod shm;
-mod icons;
-mod render;
-mod pixels;
+pub mod shm;
 
 pub use run::run_bar;

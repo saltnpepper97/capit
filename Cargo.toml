@@ -2,6 +2,7 @@
 members = [
     "crates/capit-core",
     "crates/capit-ipc",
+    "crates/capit-bar",
     "crates/capitd",
     "crates/capit",
 ]

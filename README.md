@@ -20,40 +20,6 @@ Capit is a Wayland-native screenshot tool built around a daemon + IPC architectu
 
 ---
 
-## Architecture
-
-Workspace layout:
-
-```
-Workspace
-├── capitd (daemon)
-│   ├── daemon/ (args, state, server, handlers, paths)
-│   ├── overlay_region/
-│   ├── overlay_screen/
-│   ├── capture.rs
-│   ├── config.rs
-│   └── wayland_outputs.rs
-└── capit (client)
-    ├── bar/
-    ├── CLI + IPC logic
-    └── logging/runtime
-```
-
-The daemon:
-- Loads configuration
-- Owns Wayland connection
-- Renders overlays
-- Performs captures
-- Sends UI theme to client
-
-The client:
-- Parses CLI
-- Displays floating bar
-- Talks to daemon over IPC
-- Prints results
-
----
-
 ## Build
 
 From the workspace root:
@@ -76,7 +42,7 @@ target/release/capit
 Start daemon:
 
 ```bash
-./target/release/capitd -v
+./target/release/capitd
 ```
 
 Use client:

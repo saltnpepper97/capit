@@ -1,7 +1,6 @@
 // Author: Dustin Pilgrim
 // License: MIT
 
-mod bar;
 mod cli;
 mod client;
 mod logging;

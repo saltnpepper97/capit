@@ -4,12 +4,10 @@
 use std::path::Path;
 
 use capit_core::{Mode, Target};
-use capit_ipc::{Request, Response};
-use capit_ipc::protocol::UiConfig;
+use capit_ipc::Request;
 
-use eventline::{debug, error, info};
+use eventline::{debug, info};
 
-use crate::bar;
 use crate::cli::{self, Args, Cmd};
 use crate::paths;
 
@@ -23,7 +21,7 @@ pub fn run(args: Args) -> Result<(), String> {
     debug!("socket: {}", socket.display());
 
     match args.cmd {
-        Cmd::Bar { .. } => run_bar_loop(&socket),
+        Cmd::Bar { .. } => run_capit_bar(&socket),
 
         _ => {
             let mut client = ipc::connect(&socket)?;
@@ -98,65 +96,28 @@ pub fn run(args: Args) -> Result<(), String> {
     }
 }
 
-/// Ask daemon for UI config (theme/accent) so bar can match.
-fn fetch_ui_config(socket: &Path) -> Result<UiConfig, String> {
-    let mut client = ipc::connect(socket)?;
-    let resp = client.call(Request::GetUiConfig).map_err(|e| format!("{e}"))?;
-    match resp {
-        Response::UiConfig { cfg } => Ok(cfg),
-        other => Err(format!("expected UiConfig response, got: {other:?}")),
-    }
-}
+fn run_capit_bar(socket: &Path) -> Result<(), String> {
+    use std::process::Command;
 
-/// Runs: Bar -> Capture -> (Cancelled => Bar again) / (Finished => print and exit)
-fn run_bar_loop(socket: &Path) -> Result<(), String> {
-    info!("launching bar loop");
-
-    let ui = match fetch_ui_config(socket) {
-        Ok(cfg) => {
-            info!(
-                "bar ui config: accent=0x{:08X} bg=0x{:08X}",
-                cfg.accent_colour, cfg.bar_background_colour
+    let status = match Command::new("capit-bar")
+        .arg("--socket")
+        .arg(socket)
+        .status()
+    {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(
+                "capit-bar is not installed or not in PATH. Build it with: cargo build -p capit-bar"
+                    .into(),
             );
-            cfg
         }
-        Err(e) => {
-            eventline::warn!("failed to fetch ui config from daemon: {e}");
-            UiConfig {
-                accent_colour: 0xFF0A_84FF,
-                bar_background_colour: 0xFF0F_1115,
-            }
-        }
+        Err(e) => return Err(format!("failed to run capit-bar: {e}")),
     };
 
-    loop {
-        let picked = bar::run_bar(ui.accent_colour, ui.bar_background_colour)?;
-        let Some(mode) = picked else {
-            info!("bar cancelled -> exit");
-            return Ok(());
-        };
-
-        info!("bar selected mode: {:?}", mode);
-
-        let mut client = ipc::connect(socket).map_err(|e| {
-            error!("failed to connect to daemon: {e}");
-            e
-        })?;
-
-        let target = match mode {
-            Mode::Screen => Some(Target::AllScreens),
-            _ => None,
-        };
-
-        match capture::start_capture(&mut client, mode, target, false)? {
-            capture::CaptureOutcome::Finished { path } => {
-                println!("saved to: {path}");
-                return Ok(());
-            }
-            capture::CaptureOutcome::Cancelled => {
-                info!("capture cancelled -> back to bar");
-                continue;
-            }
-        }
+    match status.code() {
+        Some(0) => Ok(()),
+        Some(2) => Ok(()), // cancelled
+        Some(c) => Err(format!("capit-bar exited with code {c}")),
+        None => Err("capit-bar terminated by signal".into()),
     }
 }

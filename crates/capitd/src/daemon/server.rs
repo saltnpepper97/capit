@@ -3,18 +3,33 @@
 
 use capit_ipc::{IpcServer, Result};
 use eventline::{debug, info, warn};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::{config, selection::SelectionState, wayland_outputs};
 use crate::config::CapitConfig;
 
 use super::handlers::handle_request;
 use super::paths::{default_socket_path, ensure_parent_dir, output_dir_from_cfg};
+use super::session;
 use super::state::{DaemonState, UiCfg};
 
 use std::fs::OpenOptions;
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+
+/// Check if an IpcError is a WouldBlock error (socket has no pending connections)
+fn is_would_block(e: &capit_ipc::IpcError) -> bool {
+    // IpcError wraps io::Error, check if it's WouldBlock
+    match e {
+        capit_ipc::IpcError::Io(io_err) => {
+            io_err.kind() == std::io::ErrorKind::WouldBlock
+        }
+        _ => false,
+    }
+}
 
 fn try_acquire_single_instance_lock(lock_path: &Path) -> std::io::Result<Option<std::fs::File>> {
     let f = OpenOptions::new()
@@ -73,6 +88,18 @@ fn capit_dir_for_log() -> String {
 }
 
 pub fn run(verbose: bool) -> Result<()> {
+    // Verify Wayland session is alive before starting
+    if let Err(e) = session::ensure_wayland_alive() {
+        warn!("not running in wayland session: {e}");
+        
+        // Only manually print if NOT verbose (eventline already logged)
+        if !verbose {
+            eprintln!("capitd: not running in wayland session: {e}");
+        }
+        
+        return Ok(()); // clean exit
+    }
+
     // Load config
     let cfg = match config::load() {
         Ok(c) => c,
@@ -146,6 +173,10 @@ pub fn run(verbose: bool) -> Result<()> {
     let server = IpcServer::bind(&sock)?;
     info!("listening on {}", sock.display());
 
+    // CRITICAL: Set socket to non-blocking mode
+    // This allows us to check the shutdown flag periodically
+    server.set_nonblocking(true)?;
+
     info!("querying Wayland outputs...");
     let outputs = wayland_outputs::query_outputs().unwrap_or_else(|e| {
         warn!("output query failed: {e}");
@@ -155,9 +186,42 @@ pub fn run(verbose: bool) -> Result<()> {
     info!("found {} outputs", outputs.len());
     state.outputs = outputs;
 
+    // ------------------------------
+    // SESSION MONITORING
+    // ------------------------------
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
+    session::spawn_wayland_socket_watcher(Arc::clone(&shutdown_flag));
+    info!("session watcher started");
+    // ------------------------------
+
     loop {
+        // Check shutdown flag before accept
+        if shutdown_flag.load(Ordering::Relaxed) {
+            info!("shutdown requested by session watcher");
+            break;
+        }
+
         debug!("waiting for client connection...");
-        let mut conn = server.accept()?;
+        
+        let mut conn = match server.accept() {
+            Ok(c) => c,
+            Err(e) if is_would_block(&e) => {
+                // Nothing to accept; keep loop responsive to watcher shutdown.
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+            Err(e) => {
+                // Other errors: check shutdown flag and log
+                if shutdown_flag.load(Ordering::Relaxed) {
+                    info!("shutdown during accept");
+                    break;
+                }
+                warn!("accept error: {e}");
+                std::thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+        };
+        
         info!("client connected");
 
         let mut selection = SelectionState::new();
@@ -169,6 +233,12 @@ pub fn run(verbose: bool) -> Result<()> {
 
         debug!("entering request loop...");
         while let Ok(req) = conn.recv() {
+            // Check shutdown flag even during client connection
+            if shutdown_flag.load(Ordering::Relaxed) {
+                info!("shutdown requested during client session");
+                return Ok(());
+            }
+
             debug!("request: {:?}", req);
             let resp = handle_request(&mut state, &mut selection, &mut conn, req);
             debug!("sending response: {:?}", resp);
@@ -177,4 +247,7 @@ pub fn run(verbose: bool) -> Result<()> {
 
         info!("client disconnected");
     }
+
+    info!("daemon shutting down gracefully");
+    Ok(())
 }

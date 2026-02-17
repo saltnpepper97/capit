@@ -33,6 +33,12 @@ const BTN_LEFT: u32 = 272;
 const KEY_ESC: u32 = 1;
 const KEY_ENTER: u32 = 28;
 
+// evdev keycodes
+const KEY_LEFT: u32 = 105;
+const KEY_RIGHT: u32 = 106;
+const KEY_UP: u32 = 103;
+const KEY_DOWN: u32 = 108;
+
 // Bar geometry
 pub(crate) const BAR_W: i32 = 420;
 pub(crate) const BAR_H: i32 = 80;
@@ -53,6 +59,22 @@ impl Choice {
             Choice::Region => Mode::Region,
             Choice::Screen => Mode::Screen,
             Choice::Window => Mode::Window,
+        }
+    }
+
+    fn idx(self) -> usize {
+        match self {
+            Choice::Region => 0,
+            Choice::Screen => 1,
+            Choice::Window => 2,
+        }
+    }
+
+    fn from_idx(i: usize) -> Choice {
+        match i {
+            0 => Choice::Region,
+            1 => Choice::Screen,
+            _ => Choice::Window,
         }
     }
 }
@@ -143,6 +165,42 @@ impl App {
         self.result = Some(None);
     }
 
+    fn is_enabled(&self, ch: Choice) -> bool {
+        ch != Choice::Window || self.window_supported
+    }
+
+    fn ensure_selected(&mut self) {
+        if self.selected.is_none() {
+            // prefer hovered if any, otherwise default to Screen (middle slot feels "primary")
+            let default = self.hover.unwrap_or(Choice::Screen);
+            self.selected = Some(default);
+        }
+        // if selected is window but not supported, pick screen
+        if self.selected == Some(Choice::Window) && !self.window_supported {
+            self.selected = Some(Choice::Screen);
+        }
+    }
+
+    fn cycle_selected(&mut self, dir: i32) {
+        self.ensure_selected();
+
+        let cur = self.selected.unwrap_or(Choice::Screen).idx() as i32;
+        let mut next = cur + dir;
+
+        // wrap 0..=2
+        if next < 0 { next = 2; }
+        if next > 2 { next = 0; }
+
+        // skip disabled Window slot if not supported
+        if !self.window_supported {
+            if next == 2 {
+                next = if dir >= 0 { 0 } else { 1 };
+            }
+        }
+
+        self.selected = Some(Choice::from_idx(next as usize));
+    }
+
     pub fn confirm(&mut self) {
         let Some(ch) = self.selected.or(self.hover) else {
             return;
@@ -218,7 +276,7 @@ impl App {
         layer_surface.set_anchor(Anchor::Bottom);
         layer_surface.set_margin(0, 0, BAR_MARGIN_BOTTOM, 0);
 
-        // Keyboard focus so ESC/ENTER works reliably
+        // Keyboard focus so ESC/ENTER/ARROWS works reliably
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
 
         // Don't reserve layout space (we're an overlay)
@@ -274,51 +332,17 @@ impl OutputHandler for App {
         &mut self.output_state
     }
 
-    fn new_output(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
-    ) {
-    }
-    fn update_output(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
-    ) {
-    }
-    fn output_destroyed(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _output: wl_output::WlOutput,
-    ) {
-    }
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
 }
 
 // Dispatch impls
 impl Dispatch<wl_compositor::WlCompositor, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &wl_compositor::WlCompositor,
-        _: wl_compositor::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
+    fn event(_: &mut Self, _: &wl_compositor::WlCompositor, _: wl_compositor::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
 impl Dispatch<wl_shm::WlShm, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &wl_shm::WlShm,
-        _: wl_shm::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
+    fn event(_: &mut Self, _: &wl_shm::WlShm, _: wl_shm::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
 impl Dispatch<wl_shm_pool::WlShmPool, ()> for App {
     fn event(
@@ -332,26 +356,10 @@ impl Dispatch<wl_shm_pool::WlShmPool, ()> for App {
     }
 }
 impl Dispatch<wl_surface::WlSurface, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &wl_surface::WlSurface,
-        _: wl_surface::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
+    fn event(_: &mut Self, _: &wl_surface::WlSurface, _: wl_surface::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
 impl Dispatch<zwlr_layer_shell_v1::ZwlrLayerShellV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &zwlr_layer_shell_v1::ZwlrLayerShellV1,
-        _: zwlr_layer_shell_v1::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
+    fn event(_: &mut Self, _: &zwlr_layer_shell_v1::ZwlrLayerShellV1, _: zwlr_layer_shell_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
 
 impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for App {
@@ -385,6 +393,9 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for App {
 
                 state.configured = true;
                 let _ = state.init_cursor(conn, qh);
+
+                // make keyboard selection usable immediately
+                state.ensure_selected();
 
                 state.pending_redraw = true;
                 state.request_redraw();
@@ -434,6 +445,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
                 let h = state.hit_choice(surface_x, surface_y);
                 if h != state.hover {
                     state.hover = h;
+                    // mouse hover also updates selection so Enter matches the highlighted item
+                    if let Some(ch) = h {
+                        if state.is_enabled(ch) {
+                            state.selected = Some(ch);
+                        }
+                    }
                     state.request_redraw();
                 }
             }
@@ -447,6 +464,11 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
                 let h = state.hit_choice(surface_x, surface_y);
                 if h != state.hover {
                     state.hover = h;
+                    if let Some(ch) = h {
+                        if state.is_enabled(ch) {
+                            state.selected = Some(ch);
+                        }
+                    }
                     state.request_redraw();
                 }
             }
@@ -460,7 +482,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
                             return;
                         }
                         state.selected = Some(h);
-                        state.confirm(); // click confirms (returns from run_bar)
+                        state.confirm(); // click confirms
                     }
                 }
             }
@@ -483,10 +505,26 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for App {
                 if key_state != WEnum::Value(wl_keyboard::KeyState::Pressed) {
                     return;
                 }
+
                 if key == KEY_ESC {
                     state.cancel();
-                } else if key == KEY_ENTER {
-                    state.confirm();
+                    return;
+                }
+
+                match key {
+                    KEY_LEFT | KEY_UP => {
+                        state.cycle_selected(-1);
+                        state.request_redraw();
+                    }
+                    KEY_RIGHT | KEY_DOWN => {
+                        state.cycle_selected(1);
+                        state.request_redraw();
+                    }
+                    KEY_ENTER => {
+                        state.ensure_selected();
+                        state.confirm();
+                    }
+                    _ => {}
                 }
             }
             _ => {}

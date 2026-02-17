@@ -89,6 +89,12 @@ pub fn try_create_surfaces(app: &mut App, qh: &QueueHandle<App>) -> Result<(), S
     }
 
     app.surfaces_created = true;
+
+    // Ensure keyboard-only users have a selection immediately.
+    if app.hovered_output_idx.is_none() && !app.outputs.is_empty() {
+        app.hovered_output_idx = Some(0);
+    }
+
     Ok(())
 }
 

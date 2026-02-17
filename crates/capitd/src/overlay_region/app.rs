@@ -299,13 +299,17 @@ impl Dispatch<wl_seat::WlSeat, ()> for App {
         seat: &wl_seat::WlSeat,
         event: wl_seat::Event,
         _: &(),
-        _: &Connection,
+        conn: &Connection,
         qh: &QueueHandle<Self>,
     ) {
         if let wl_seat::Event::Capabilities { capabilities } = event {
             if let WEnum::Value(caps) = capabilities {
                 if caps.contains(wl_seat::Capability::Pointer) && state.pointer.is_none() {
                     state.pointer = Some(seat.get_pointer(qh, ()));
+
+                    if let Err(e) = state.init_cursor(conn, qh) {
+                        eprintln!("Failed to init cursor: {}", e);
+                    }
                 }
                 if caps.contains(wl_seat::Capability::Keyboard) && state.keyboard.is_none() {
                     state.keyboard = Some(seat.get_keyboard(qh, ()));
