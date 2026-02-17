@@ -15,11 +15,10 @@ use super::app::App;
 pub struct ShmBuffer {
     pub _file: File,
     pub mmap: MmapMut,
-    pub pool: wl_shm_pool::WlShmPool,
+    _pool: wl_shm_pool::WlShmPool,
     pub buffer: wl_buffer::WlBuffer,
     pub width: i32,
     pub height: i32,
-    pub stride: i32,
     pub busy: bool,
 }
 
@@ -46,11 +45,10 @@ impl ShmBuffer {
         Ok(Self {
             _file: file,
             mmap,
-            pool,
+            _pool: pool,
             buffer,
             width,
             height,
-            stride,
             busy: false,
         })
     }

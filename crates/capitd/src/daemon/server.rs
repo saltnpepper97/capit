@@ -45,7 +45,7 @@ fn try_acquire_single_instance_lock(lock_path: &Path) -> std::io::Result<Option<
     } else {
         let e = std::io::Error::last_os_error();
         match e.raw_os_error() {
-            Some(libc::EWOULDBLOCK) | Some(libc::EAGAIN) => Ok(None),
+            Some(libc::EWOULDBLOCK) => Ok(None),
             _ => Err(e),
         }
     }

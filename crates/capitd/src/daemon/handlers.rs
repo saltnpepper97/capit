@@ -6,10 +6,9 @@ use capit_ipc::{Event, Request, Response};
 
 use eventline::{debug, error, info, warn};
 
-use crate::{
-    capture, overlay_region, overlay_screen, selection::SelectionState,
-};
+use crate::{capture, overlay_region, overlay_screen, selection::SelectionState};
 
+use super::notify;
 use super::paths::default_output_path;
 use super::state::DaemonState;
 
@@ -21,7 +20,10 @@ pub fn handle_request(
 ) -> Response {
     // StartCapture FIRST
     if let Request::StartCapture { mode, target, with_ui } = req {
-        info!("StartCapture: mode={:?} target={:?} with_ui={}", mode, target, with_ui);
+        info!(
+            "StartCapture: mode={:?} target={:?} with_ui={}",
+            mode, target, with_ui
+        );
 
         return match mode {
             Mode::Region => {
@@ -34,6 +36,7 @@ pub fn handle_request(
                         error!("determine_output_index failed: {}", msg);
                         state.active_job = None;
                         let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                        let _ = notify::notify_failed(&msg);
                         return Response::Error { message: msg };
                     }
                 };
@@ -54,12 +57,18 @@ pub fn handle_request(
 
                 warn!("{msg}");
                 let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                let _ = notify::notify_failed(&msg);
 
                 state.active_job = None;
                 Response::Error { message: msg }
             }
 
-            Mode::Record => Response::Error { message: "record not implemented yet".into() },
+            Mode::Record => {
+                let msg = "record not implemented yet".to_string();
+                let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                let _ = notify::notify_failed(&msg);
+                Response::Error { message: msg }
+            }
         };
     }
 
@@ -80,6 +89,7 @@ pub fn handle_request(
                                 None => {
                                     let msg = "no selection rect set".to_string();
                                     let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                                    let _ = notify::notify_failed(&msg);
                                     state.active_job = None;
                                     return Response::Error { message: msg };
                                 }
@@ -93,10 +103,12 @@ pub fn handle_request(
                                     let _ = conn.send_event(Event::CaptureFinished {
                                         path: out_path.display().to_string(),
                                     });
+                                    let _ = notify::notify_saved(&out_path);
                                     state.active_job = None;
                                 }
                                 Err(msg) => {
                                     let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                                    let _ = notify::notify_failed(&msg);
                                     state.active_job = None;
                                     return Response::Error { message: msg };
                                 }
@@ -105,6 +117,7 @@ pub fn handle_request(
                         other => {
                             let msg = format!("ConfirmSelection for {other:?} not implemented yet");
                             let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                            let _ = notify::notify_failed(&msg);
                             state.active_job = None;
                             return Response::Error { message: msg };
                         }
@@ -128,7 +141,9 @@ pub fn handle_request(
             outputs: state.outputs.clone(),
         },
 
-        Request::GetUiConfig => Response::UiConfig { cfg: state.ui.to_ipc() },
+        Request::GetUiConfig => Response::UiConfig {
+            cfg: state.ui.to_ipc(),
+        },
 
         Request::StartCapture { .. } => Response::Error {
             message: "Internal error: StartCapture not handled properly".into(),
@@ -167,26 +182,32 @@ fn handle_region_overlay_capture(
                     let _ = conn.send_event(Event::CaptureFinished {
                         path: out_path.display().to_string(),
                     });
+                    let _ = notify::notify_saved(&out_path);
                     state.active_job = None;
                     Response::Ok
                 }
                 Err(msg) => {
                     error!("capture failed: {}", msg);
                     let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+                    let _ = notify::notify_failed(&msg);
                     state.active_job = None;
                     Response::Error { message: msg }
                 }
             }
         }
         Ok(None) => {
+            // Cancel: do NOT notify (avoid spam)
             info!("overlay cancelled");
-            let _ = conn.send_event(Event::CaptureFailed { message: "cancelled".into() });
+            let _ = conn.send_event(Event::CaptureFailed {
+                message: "cancelled".into(),
+            });
             state.active_job = None;
             Response::Ok
         }
         Err(msg) => {
             error!("overlay error: {}", msg);
             let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+            let _ = notify::notify_failed(&msg);
             state.active_job = None;
             Response::Error { message: msg }
         }
@@ -202,21 +223,28 @@ fn handle_screen_overlay_capture(
     let _ = conn.send_event(Event::CaptureStarted { mode: Mode::Screen });
 
     let initial_idx = match &target {
-        Some(Target::OutputName(name)) => state.outputs.iter().position(|o| o.name.as_deref() == Some(name.as_str())),
+        Some(Target::OutputName(name)) => state
+            .outputs
+            .iter()
+            .position(|o| o.name.as_deref() == Some(name.as_str())),
         _ => None,
     };
 
     let picked = match overlay_screen::run_screen_overlay(state.outputs.clone(), initial_idx) {
         Ok(Some(t)) => t,
         Ok(None) => {
+            // Cancel: do NOT notify
             info!("screen overlay cancelled");
-            let _ = conn.send_event(Event::CaptureFailed { message: "cancelled".into() });
+            let _ = conn.send_event(Event::CaptureFailed {
+                message: "cancelled".into(),
+            });
             state.active_job = None;
             return Response::Ok;
         }
         Err(msg) => {
             error!("screen overlay error: {}", msg);
             let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+            let _ = notify::notify_failed(&msg);
             state.active_job = None;
             return Response::Error { message: msg };
         }
@@ -228,14 +256,28 @@ fn handle_screen_overlay_capture(
     let result: std::result::Result<(), String> = match picked {
         Target::AllScreens => capture::capture_screen_to(&out_path),
 
-        Target::OutputName(name) => match state.outputs.iter().find(|o| o.name.as_deref() == Some(name.as_str())) {
+        Target::OutputName(name) => match state
+            .outputs
+            .iter()
+            .find(|o| o.name.as_deref() == Some(name.as_str()))
+        {
             Some(out) => {
                 let s = out.scale.max(1);
-                let crop = capture::CaptureCrop { x: out.x * s, y: out.y * s, w: out.width * s, h: out.height * s };
+                let crop = capture::CaptureCrop {
+                    x: out.x * s,
+                    y: out.y * s,
+                    w: out.width * s,
+                    h: out.height * s,
+                };
                 capture::capture_screen_to_crop(&out_path, crop)
             }
             None => {
-                let known = state.outputs.iter().filter_map(|o| o.name.as_deref()).collect::<Vec<_>>().join(", ");
+                let known = state
+                    .outputs
+                    .iter()
+                    .filter_map(|o| o.name.as_deref())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 Err(format!("unknown output '{name}'. Try one of: {known}"))
             }
         },
@@ -248,12 +290,14 @@ fn handle_screen_overlay_capture(
             let _ = conn.send_event(Event::CaptureFinished {
                 path: out_path.display().to_string(),
             });
+            let _ = notify::notify_saved(&out_path);
             state.active_job = None;
             Response::Ok
         }
         Err(msg) => {
             error!("capture failed: {}", msg);
             let _ = conn.send_event(Event::CaptureFailed { message: msg.clone() });
+            let _ = notify::notify_failed(&msg);
             state.active_job = None;
             Response::Error { message: msg }
         }

@@ -6,8 +6,6 @@ mod render;
 mod shm;
 mod surfaces;
 
-pub use app::App;
-
 use capit_core::{OutputInfo, Target};
 
 use smithay_client_toolkit::{

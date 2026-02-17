@@ -15,11 +15,10 @@ use super::app::App;
 pub struct ShmBuffer {
     _file: File,
     mmap: MmapMut,
-    pub pool: wl_shm_pool::WlShmPool,
+    _pool: wl_shm_pool::WlShmPool,
     pub buffer: wl_buffer::WlBuffer,
     pub width: i32,
     pub height: i32,
-    pub stride: i32,
     pub busy: bool,
 }
 
@@ -38,7 +37,7 @@ impl ShmBuffer {
         let pool = shm.create_pool(file.as_fd(), size as i32, qh, ());
         let buffer = pool.create_buffer(0, width, height, stride, wl_shm::Format::Argb8888, qh, ());
 
-        Ok(Self { _file: file, mmap, pool, buffer, width, height, stride, busy: false })
+        Ok(Self { _file: file, mmap, _pool: pool, buffer, width, height, busy: false })
     }
 
     pub fn pixels_mut(&mut self) -> &mut [u8] { &mut self.mmap[..] }

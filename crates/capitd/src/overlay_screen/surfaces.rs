@@ -3,10 +3,8 @@
 
 use capit_core::OutputInfo;
 
-use smithay_client_toolkit::output::OutputState;
-
-use wayland_client::protocol::{wl_output, wl_surface, wl_shm, wl_buffer};
-use wayland_client::{QueueHandle, Proxy};
+use wayland_client::protocol::{wl_surface, wl_buffer};
+use wayland_client::QueueHandle;
 
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1,
@@ -18,7 +16,6 @@ use super::shm::ShmBuffer;
 
 pub struct OutputSurface {
     pub output_info: OutputInfo,
-    pub wl_output: wl_output::WlOutput,
     pub surface: wl_surface::WlSurface,
     pub layer_surface: zwlr_layer_surface_v1::ZwlrLayerSurfaceV1,
     pub shm_buf: Option<ShmBuffer>,
@@ -78,7 +75,6 @@ pub fn try_create_surfaces(app: &mut App, qh: &QueueHandle<App>) -> Result<(), S
 
         app.output_surfaces.push(OutputSurface {
             output_info: output_info.clone(),
-            wl_output: wl_output.clone(),
             surface: surface.clone(),
             layer_surface,
             shm_buf: Some(shm_buf),
