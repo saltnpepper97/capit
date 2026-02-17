@@ -19,10 +19,7 @@ use wayland_client::{
 
 use wayland_cursor::CursorTheme;
 
-use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1,
-    zwlr_layer_surface_v1,
-};
+use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1, zwlr_layer_surface_v1};
 
 use super::surfaces::OutputSurface;
 
@@ -47,6 +44,9 @@ pub struct App {
 
     pub outputs: Vec<OutputInfo>,
     pub hovered_output_idx: Option<usize>,
+
+    // Theme
+    pub accent_colour: u32,
 
     pub compositor: Option<wl_compositor::WlCompositor>,
     pub shm: Option<wl_shm::WlShm>,
@@ -77,26 +77,35 @@ impl App {
         output_state: OutputState,
         outputs: Vec<OutputInfo>,
         initial_output_idx: Option<usize>,
+        accent_colour: u32,
     ) -> Self {
         Self {
             registry_state,
             output_state,
             outputs,
             hovered_output_idx: initial_output_idx,
+
+            accent_colour,
+
             compositor: None,
             shm: None,
             seat: None,
             layer_shell: None,
+
             output_surfaces: Vec::new(),
             surfaces_created: false,
+
             pointer: None,
             keyboard: None,
             current_surface_idx: None,
+
             cursor_surface: None,
             cursor_theme: None,
             cursor_name: "left_ptr",
+
             pending_redraw: true,
             result: None,
+
             shift_down: false,
         }
     }
@@ -118,8 +127,7 @@ impl App {
     }
 
     pub fn set_cursor_image(&mut self, pointer: &wl_pointer::WlPointer, serial: u32) {
-        let (Some(theme), Some(surf)) = (self.cursor_theme.as_mut(), self.cursor_surface.as_ref())
-        else {
+        let (Some(theme), Some(surf)) = (self.cursor_theme.as_mut(), self.cursor_surface.as_ref()) else {
             return;
         };
 
@@ -138,15 +146,29 @@ impl App {
         surf.commit();
     }
 
-    pub fn is_finished(&self) -> bool { self.result.is_some() }
-    pub fn cancel(&mut self) { self.result = Some(None); }
-    pub fn confirm_all(&mut self) { self.result = Some(Some(Target::AllScreens)); }
+    pub fn is_finished(&self) -> bool {
+        self.result.is_some()
+    }
+    pub fn cancel(&mut self) {
+        self.result = Some(None);
+    }
+    pub fn confirm_all(&mut self) {
+        self.result = Some(Some(Target::AllScreens));
+    }
 
     pub fn confirm_hovered(&mut self) {
-        let idx = match self.hovered_output_idx { Some(i) => i, None => return };
-        if idx >= self.outputs.len() { return; }
+        let idx = match self.hovered_output_idx {
+            Some(i) => i,
+            None => return,
+        };
+        if idx >= self.outputs.len() {
+            return;
+        }
 
-        let name = self.outputs[idx].name.clone().unwrap_or_else(|| format!("OUT-{idx}"));
+        let name = self.outputs[idx]
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("OUT-{idx}"));
         self.result = Some(Some(Target::OutputName(name)));
     }
 
@@ -168,14 +190,21 @@ impl App {
         let n = self.outputs.len() as i32;
 
         let mut next = cur as i32 + dir;
-        if next < 0 { next = n - 1; }
-        if next >= n { next = 0; }
+        if next < 0 {
+            next = n - 1;
+        }
+        if next >= n {
+            next = 0;
+        }
 
         self.hovered_output_idx = Some(next as usize);
     }
 
     pub fn request_redraw(&mut self) {
-        let any_busy = self.output_surfaces.iter().any(|os| os.shm_buf.as_ref().map_or(false, |b| b.busy));
+        let any_busy = self
+            .output_surfaces
+            .iter()
+            .any(|os| os.shm_buf.as_ref().map_or(false, |b| b.busy));
         if any_busy {
             self.pending_redraw = true;
             return;
@@ -186,22 +215,42 @@ impl App {
 
 // SCTK trait implementations
 impl ProvidesRegistryState for App {
-    fn registry(&mut self) -> &mut RegistryState { &mut self.registry_state }
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry_state
+    }
     registry_handlers![OutputState];
 }
 
 impl OutputHandler for App {
-    fn output_state(&mut self) -> &mut OutputState { &mut self.output_state }
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
 
-    fn new_output(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+    fn new_output(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        _output: wl_output::WlOutput,
+    ) {
         let _ = super::surfaces::try_create_surfaces(self, qh);
     }
 
-    fn update_output(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+    fn update_output(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        _output: wl_output::WlOutput,
+    ) {
         let _ = super::surfaces::try_create_surfaces(self, qh);
     }
 
-    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+    fn output_destroyed(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _output: wl_output::WlOutput,
+    ) {
+    }
 }
 
 impl Dispatch<wl_shm_pool::WlShmPool, ()> for App {
@@ -210,9 +259,10 @@ impl Dispatch<wl_shm_pool::WlShmPool, ()> for App {
         _: &wl_shm_pool::WlShmPool,
         _: wl_shm_pool::Event,
         _: &(),
-        _: &wayland_client::Connection,
-        _: &wayland_client::QueueHandle<Self>,
-    ) {}
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for App {
@@ -259,10 +309,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
                     state.current_surface_idx = Some(idx);
 
                     if let Some(name) = os.output_info.name.as_ref() {
-                        if let Some(oi) = state
-                            .outputs
-                            .iter()
-                            .position(|o| o.name.as_ref() == Some(name))
+                        if let Some(oi) = state.outputs.iter().position(|o| o.name.as_ref() == Some(name))
                         {
                             state.hovered_output_idx = Some(oi);
                         }
@@ -383,7 +430,6 @@ impl Dispatch<wl_surface::WlSurface, ()> for App {
 impl Dispatch<zwlr_layer_shell_v1::ZwlrLayerShellV1, ()> for App {
     fn event(_: &mut Self, _: &zwlr_layer_shell_v1::ZwlrLayerShellV1, _: zwlr_layer_shell_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
 }
-
 impl Dispatch<wl_seat::WlSeat, ()> for App {
     fn event(
         state: &mut Self,

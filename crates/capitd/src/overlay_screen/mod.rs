@@ -8,18 +8,22 @@ mod surfaces;
 
 use capit_core::{OutputInfo, Target};
 
-use smithay_client_toolkit::{
-    output::OutputState,
-    registry::RegistryState,
+use smithay_client_toolkit::{output::OutputState, registry::RegistryState};
+
+use wayland_client::{
+    globals::registry_queue_init,
+    protocol::{wl_compositor, wl_seat, wl_shm},
+    Connection,
 };
 
-use wayland_client::{globals::registry_queue_init, protocol::{wl_compositor, wl_seat, wl_shm}, Connection};
-
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1;
+
+const DEFAULT_ACCENT: u32 = 0xFF0A_84FF;
 
 pub fn run_screen_overlay(
     all_outputs: Vec<OutputInfo>,
     initial_output_idx: Option<usize>,
+    accent_colour: u32,
 ) -> Result<Option<Target>, String> {
     if all_outputs.is_empty() {
         return Err("no outputs available".into());
@@ -37,7 +41,9 @@ pub fn run_screen_overlay(
     let registry_state = RegistryState::new(&globals);
     let output_state = OutputState::new(&globals, &qh);
 
-    let mut app = app::App::new(registry_state, output_state, all_outputs, initial_output_idx);
+    let accent = if accent_colour == 0 { DEFAULT_ACCENT } else { accent_colour };
+
+    let mut app = app::App::new(registry_state, output_state, all_outputs, initial_output_idx, accent);
 
     app.compositor = globals.bind::<wl_compositor::WlCompositor, _, _>(&qh, 1..=6, ()).ok();
     app.shm        = globals.bind::<wl_shm::WlShm, _, _>(&qh, 1..=1, ()).ok();

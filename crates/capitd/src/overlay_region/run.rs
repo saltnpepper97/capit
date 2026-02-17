@@ -17,6 +17,7 @@ use super::app::App;
 pub fn run_region_overlay(
     all_outputs: Vec<OutputInfo>,
     target_output_idx: usize,
+    accent_colour: u32,
 ) -> Result<Option<Rect>, String> {
     if all_outputs.is_empty() {
         return Err("no outputs available".into());
@@ -36,7 +37,13 @@ pub fn run_region_overlay(
     let registry_state = RegistryState::new(&globals);
     let output_state = OutputState::new(&globals, &qh);
 
-    let mut app = App::new(registry_state, output_state, all_outputs, target_output_idx);
+    let mut app = App::new(
+        registry_state,
+        output_state,
+        all_outputs,
+        target_output_idx,
+        accent_colour,
+    );
 
     app.compositor = globals
         .bind::<wl_compositor::WlCompositor, _, _>(&qh, 1..=6, ())

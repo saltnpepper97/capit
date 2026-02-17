@@ -169,7 +169,9 @@ fn handle_region_overlay_capture(
     conn: &mut capit_ipc::ClientConn,
     target_output_idx: usize,
 ) -> Response {
-    match overlay_region::run_region_overlay(state.outputs.clone(), target_output_idx) {
+    let accent = state.ui.accent_colour;
+
+    match overlay_region::run_region_overlay(state.outputs.clone(), target_output_idx, accent) {
         Ok(Some(rect)) => {
             info!("overlay confirmed: {:?}", rect);
 
@@ -230,7 +232,9 @@ fn handle_screen_overlay_capture(
         _ => None,
     };
 
-    let picked = match overlay_screen::run_screen_overlay(state.outputs.clone(), initial_idx) {
+    let accent = state.ui.accent_colour;
+
+    let picked = match overlay_screen::run_screen_overlay(state.outputs.clone(), initial_idx, accent) {
         Ok(Some(t)) => t,
         Ok(None) => {
             // Cancel: do NOT notify

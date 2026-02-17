@@ -30,6 +30,9 @@ const BTN_LEFT: u32 = 272;
 const KEY_ESC: u32 = 1;
 const KEY_ENTER: u32 = 28;
 
+// Same default you use elsewhere (bar, etc.)
+const DEFAULT_ACCENT: u32 = 0xFF0A_84FF;
+
 pub struct App {
     // SCTK state
     pub registry_state: RegistryState,
@@ -43,6 +46,9 @@ pub struct App {
     pub desktop_min_y: i32,
     pub desktop_max_x: i32,
     pub desktop_max_y: i32,
+
+    // Theme
+    pub accent_colour: u32,
 
     // Wayland objects
     pub compositor: Option<wl_compositor::WlCompositor>,
@@ -80,6 +86,7 @@ impl App {
         output_state: OutputState,
         outputs: Vec<OutputInfo>,
         target_output_idx: usize,
+        accent_colour: u32,
     ) -> Self {
         let (min_x, min_y, max_x, max_y) = outputs.iter().fold(
             (i32::MAX, i32::MAX, i32::MIN, i32::MIN),
@@ -99,6 +106,8 @@ impl App {
         let init_x = target_output.x + (target_output.width - init_w) / 2;
         let init_y = target_output.y + (target_output.height - init_h) / 2;
 
+        let accent = if accent_colour == 0 { DEFAULT_ACCENT } else { accent_colour };
+
         Self {
             registry_state,
             output_state,
@@ -108,6 +117,8 @@ impl App {
             desktop_min_y: min_y,
             desktop_max_x: max_x,
             desktop_max_y: max_y,
+
+            accent_colour: accent,
 
             compositor: None,
             shm: None,

@@ -2,8 +2,9 @@
 
 Capit is a Wayland-native screenshot tool built around a daemon + IPC architecture with clean overlay UIs.
 
-- **capitd** → daemon (owns Wayland, overlays, capture, config)
-- **capit** → client (CLI + floating bar UI)
+- **capitd** → daemon (owns Wayland, overlays, capture, config, notifications)
+- **capit** → client CLI (requests capture + spawns UIs)
+- **capit-bar** → floating bar UI executable (Region / Screen / Window)
 - Overlays built with smithay-client-toolkit (SCTK) + wlr-layer-shell
 - UI theme (accent + bar background) provided by daemon via IPC
 
@@ -13,8 +14,9 @@ Capit is a Wayland-native screenshot tool built around a daemon + IPC architectu
 
 - Region capture (drag to select)
 - Screen picker overlay (monitor selection)
-- Floating bar UI (Region / Screen / Window)
+- Floating bar UI (`capit-bar`) (Region / Screen / Window)
 - Configurable UI theme (accent + bar background)
+- Desktop notifications on success/error
 - Clean modular Rust architecture
 - Safe fallback to internal defaults on config errors
 
@@ -33,6 +35,7 @@ Binaries:
 ```
 target/release/capitd
 target/release/capit
+target/release/capit-bar
 ```
 
 ---
@@ -48,7 +51,7 @@ Start daemon:
 Use client:
 
 ```bash
-./target/release/capit bar
+./target/release/capit bar          # spawns ./target/release/capit-bar
 ./target/release/capit region
 ./target/release/capit screen
 ./target/release/capit screen -o DP-1
@@ -139,12 +142,11 @@ capit-<unix_timestamp>.png
 
 ### Next
 - Clipboard copy support
-- Desktop notifications
+- Theme polish (accent applied to overlay outlines; more bar customization, including item background)
 - Minor UI refinements
 
 ### Later
 - Recording mode
-- Theme polish
 - Performance tuning
 
 ---

@@ -9,8 +9,6 @@ const BG_DIM_ARGB: u32 = (DIM_A as u32) << 24;
 const HOVER_DIM_ARGB: u32 = (HOVER_DIM_A as u32) << 24;
 
 const BORDER_THICKNESS: i32 = 2;
-const BORDER_ARGB: u32 = 0xFF0A_84FF;
-const BORDER_GLOW_ARGB: u32 = 0x340A_84FF;
 
 pub fn redraw_all(app: &mut App) -> Result<(), String> {
     let hovered_name = app
@@ -19,8 +17,13 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
         .and_then(|o| o.name.as_ref())
         .cloned();
 
+    let border_argb: u32 = app.accent_colour;
+    let border_glow_argb: u32 = (border_argb & 0x00FF_FFFF) | (0x34u32 << 24);
+
     for (si, os) in app.output_surfaces.iter_mut().enumerate() {
-        if !os.configured { continue; }
+        if !os.configured {
+            continue;
+        }
 
         let sb = os.shm_buf.as_mut().ok_or("no shm buffer")?;
         if sb.busy {
@@ -39,8 +42,28 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
 
         if is_hovered {
             fill_u32(buf, HOVER_DIM_ARGB);
-            draw_border_u32(buf, buf_w, buf_h, 1, 1, buf_w - 2, buf_h - 2, BORDER_THICKNESS + 2, BORDER_GLOW_ARGB);
-            draw_border_u32(buf, buf_w, buf_h, 2, 2, buf_w - 4, buf_h - 4, BORDER_THICKNESS, BORDER_ARGB);
+            draw_border_u32(
+                buf,
+                buf_w,
+                buf_h,
+                1,
+                1,
+                buf_w - 2,
+                buf_h - 2,
+                BORDER_THICKNESS + 2,
+                border_glow_argb,
+            );
+            draw_border_u32(
+                buf,
+                buf_w,
+                buf_h,
+                2,
+                2,
+                buf_w - 4,
+                buf_h - 4,
+                BORDER_THICKNESS,
+                border_argb,
+            );
         } else {
             fill_u32(buf, BG_DIM_ARGB);
         }
@@ -61,12 +84,23 @@ fn fill_u32(buf: &mut [u8], argb: u32) {
     body.fill(argb);
 }
 
-fn fill_rect_u32(buf: &mut [u8], w: i32, h: i32, x: i32, y: i32, rw: i32, rh: i32, argb: u32) {
+fn fill_rect_u32(
+    buf: &mut [u8],
+    w: i32,
+    h: i32,
+    x: i32,
+    y: i32,
+    rw: i32,
+    rh: i32,
+    argb: u32,
+) {
     let x0 = x.max(0);
     let y0 = y.max(0);
     let x1 = (x + rw).min(w);
     let y1 = (y + rh).min(h);
-    if x1 <= x0 || y1 <= y0 { return; }
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
 
     let (_, body, _) = unsafe { buf.align_to_mut::<u32>() };
     let bw = w as usize;
@@ -79,8 +113,20 @@ fn fill_rect_u32(buf: &mut [u8], w: i32, h: i32, x: i32, y: i32, rw: i32, rh: i3
     }
 }
 
-fn draw_border_u32(buf: &mut [u8], w: i32, h: i32, x: i32, y: i32, rw: i32, rh: i32, t: i32, argb: u32) {
-    if rw <= 0 || rh <= 0 || t <= 0 { return; }
+fn draw_border_u32(
+    buf: &mut [u8],
+    w: i32,
+    h: i32,
+    x: i32,
+    y: i32,
+    rw: i32,
+    rh: i32,
+    t: i32,
+    argb: u32,
+) {
+    if rw <= 0 || rh <= 0 || t <= 0 {
+        return;
+    }
     fill_rect_u32(buf, w, h, x, y, rw, t, argb);
     fill_rect_u32(buf, w, h, x, y + rh - t, rw, t, argb);
     fill_rect_u32(buf, w, h, x, y, t, rh, argb);
