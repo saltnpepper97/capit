@@ -440,7 +440,7 @@ dependencies = [
  "capit-core",
  "capit-ipc",
  "clap",
- "eventline",
+ "eventline 0.7.2",
  "memmap2",
  "once_cell",
  "resvg",
@@ -459,7 +459,7 @@ version = "0.1.0"
 dependencies = [
  "capit-core",
  "capit-ipc",
- "eventline",
+ "eventline 0.6.1",
  "memmap2",
  "once_cell",
  "resvg",
@@ -499,7 +499,7 @@ dependencies = [
  "capit-core",
  "capit-ipc",
  "clap",
- "eventline",
+ "eventline 0.7.2",
  "futures-util",
  "image",
  "libc",
@@ -535,9 +535,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "clap"
-version = "4.5.58"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63be97961acde393029492ce0be7a1af7e323e6bae9511ebfac33751be5e6806"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -545,9 +545,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.58"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f13174bda5dfd69d7e947827e5af4b0f2f94a4a3ee92912fba07a66150f21e2"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
 dependencies = [
  "anstream",
  "anstyle",
@@ -833,6 +833,16 @@ name = "eventline"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9bd6de6f9936faf8cc036a2c298f5d4cf7af010f966f69fcb9e3cd1903b20d9c"
+dependencies = [
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
+name = "eventline"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e742ff49d7e5e027b36508acb6e6f8a11bbbeb5d86d3cf30eb372654f63869c5"
 dependencies = [
  "parking_lot",
  "serde",

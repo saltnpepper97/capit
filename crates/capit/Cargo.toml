@@ -8,7 +8,7 @@ capit-core = { path = "../capit-core", features = ["clap"] }
 capit-ipc  = { path = "../capit-ipc/" }
 
 clap = { version = "4.5.58", features = ["derive"] }
-eventline = "0.6.1"
+eventline = "0.7.2"
 memmap2 = "0.9.10"
 once_cell = "1.21.3"
 resvg = "0.47.0"
