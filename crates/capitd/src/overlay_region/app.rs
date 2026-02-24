@@ -1,7 +1,5 @@
 // Author: Dustin Pilgrim
 // License: MIT
-//
-// Region overlay using SCTK for proper output handling
 
 use capit_core::{OutputInfo, Rect};
 
@@ -393,20 +391,42 @@ impl Dispatch<wl_pointer::WlPointer, ()> for App {
                         state.grab_rect = state.selection;
                         state.drag_mode = model::hit_test(state.selection, state.cursor.0, state.cursor.1);
 
-                        // preserve your original special-case behavior
-                        if matches!(state.drag_mode, DragMode::Resize(_))
-                            && !state.selection.contains(state.cursor.0, state.cursor.1)
-                        {
-                            state.grab_cursor = (
-                                state.grab_rect.x + state.grab_rect.w,
-                                state.grab_rect.y + state.grab_rect.h,
-                            );
+                        // If click started outside selection but we are resizing, anchor grab cursor
+                        // to the handle we're effectively dragging.
+                        if let DragMode::Resize(dir) = state.drag_mode {
+                            if !state.selection.contains(state.cursor.0, state.cursor.1) {
+                                let anchor_x = if dir.left {
+                                    state.grab_rect.x
+                                } else {
+                                    state.grab_rect.x + state.grab_rect.w
+                                };
+                                let anchor_y = if dir.top {
+                                    state.grab_rect.y
+                                } else {
+                                    state.grab_rect.y + state.grab_rect.h
+                                };
+                                state.grab_cursor = (anchor_x, anchor_y);
+                            }
                         }
 
                         state.request_redraw();
                     }
 
                     WEnum::Value(wl_pointer::ButtonState::Released) => {
+                        // Apply once on release too, so a click-without-drag still moves that corner/edge.
+                        if !matches!(state.drag_mode, DragMode::None) {
+                            state.selection = model::apply_drag(
+                                state.drag_mode,
+                                state.cursor,
+                                state.grab_cursor,
+                                state.grab_rect,
+                                state.desktop_min_x,
+                                state.desktop_min_y,
+                                state.desktop_max_x,
+                                state.desktop_max_y,
+                            );
+                        }
+
                         state.drag_mode = DragMode::None;
                         state.request_redraw();
                     }

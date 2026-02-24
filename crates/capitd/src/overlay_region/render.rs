@@ -10,12 +10,12 @@ const BG_DIM_ARGB: u32 = (DIM_A as u32) << 24;
 const CLEAR_ARGB: u32 = 0x0000_0000;
 const SHADOW_ARGB_1: u32 = 0x2A00_0000;
 const SHADOW_ARGB_2: u32 = 0x1600_0000;
-const HANDLE_INNER_ARGB: u32 = 0xFFFF_FFFF;
 
 pub fn redraw_all(app: &mut App) -> Result<(), String> {
     // Use daemon-provided accent colour for border + handles
     let border_argb: u32 = app.accent_colour;
     let handle_outer_argb: u32 = border_argb;
+    let handle_inner_argb: u32 = border_argb; // no white center dot
 
     for output_surface in &mut app.output_surfaces {
         if !output_surface.configured {
@@ -108,7 +108,7 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
                         buf_h,
                         sel,
                         handle_outer_argb,
-                        HANDLE_INNER_ARGB,
+                        handle_inner_argb,
                     );
                 } else {
                     fill_rect_u32(buf, buf_w, buf_h, clip_x, clip_y, clip_w, clip_h, CLEAR_ARGB);

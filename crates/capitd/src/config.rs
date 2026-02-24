@@ -1,5 +1,5 @@
 // Author: Dustin Pilgrim
-// License: GPLv3
+// License: MIT
 
 use std::env;
 use std::path::{Path, PathBuf};

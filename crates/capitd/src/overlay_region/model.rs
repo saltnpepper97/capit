@@ -2,8 +2,11 @@
 // License: MIT
 
 pub const BORDER_THICKNESS: i32 = 2;
-pub const HANDLE_SIZE: i32 = 8;
-pub const HANDLE_HIT: i32 = 12;
+
+// Bigger circles
+pub const HANDLE_SIZE: i32 = 12;
+pub const HANDLE_HIT: i32 = 14;
+
 pub const MIN_W: i32 = 8;
 pub const MIN_H: i32 = 8;
 
@@ -59,9 +62,115 @@ impl ResizeDir {
     }
 }
 
+fn dist2(ax: i32, ay: i32, bx: i32, by: i32) -> i64 {
+    let dx = (ax - bx) as i64;
+    let dy = (ay - by) as i64;
+    dx * dx + dy * dy
+}
+
+fn corner_hit(selection: RectLocal, px: i32, py: i32) -> Option<ResizeDir> {
+    // Corner handles are centered on the rectangle corners.
+    // Use a circular hit region so grab feels "round".
+    let r = selection;
+    let rad = HANDLE_HIT.max(HANDLE_SIZE / 2);
+    let rad2 = (rad as i64) * (rad as i64);
+
+    let tl = dist2(px, py, r.x, r.y);
+    let tr = dist2(px, py, r.x + r.w, r.y);
+    let bl = dist2(px, py, r.x, r.y + r.h);
+    let br = dist2(px, py, r.x + r.w, r.y + r.h);
+
+    let mut best = (i64::MAX, 0);
+    for (d, idx) in [(tl, 0), (tr, 1), (bl, 2), (br, 3)] {
+        if d < best.0 {
+            best = (d, idx);
+        }
+    }
+
+    if best.0 <= rad2 {
+        let dir = match best.1 {
+            0 => ResizeDir {
+                left: true,
+                right: false,
+                top: true,
+                bottom: false,
+            }, // TL
+            1 => ResizeDir {
+                left: false,
+                right: true,
+                top: true,
+                bottom: false,
+            }, // TR
+            2 => ResizeDir {
+                left: true,
+                right: false,
+                top: false,
+                bottom: true,
+            }, // BL
+            _ => ResizeDir {
+                left: false,
+                right: true,
+                top: false,
+                bottom: true,
+            }, // BR
+        };
+        return Some(dir);
+    }
+
+    None
+}
+
+fn nearest_corner_dir(selection: RectLocal, px: i32, py: i32) -> ResizeDir {
+    let r = selection;
+    let tl = dist2(px, py, r.x, r.y);
+    let tr = dist2(px, py, r.x + r.w, r.y);
+    let bl = dist2(px, py, r.x, r.y + r.h);
+    let br = dist2(px, py, r.x + r.w, r.y + r.h);
+
+    let mut best = (tl, 0);
+    for (d, idx) in [(tr, 1), (bl, 2), (br, 3)] {
+        if d < best.0 {
+            best = (d, idx);
+        }
+    }
+
+    match best.1 {
+        0 => ResizeDir {
+            left: true,
+            right: false,
+            top: true,
+            bottom: false,
+        },
+        1 => ResizeDir {
+            left: false,
+            right: true,
+            top: true,
+            bottom: false,
+        },
+        2 => ResizeDir {
+            left: true,
+            right: false,
+            top: false,
+            bottom: true,
+        },
+        _ => ResizeDir {
+            left: false,
+            right: true,
+            top: false,
+            bottom: true,
+        },
+    }
+}
+
 pub fn hit_test(selection: RectLocal, px: i32, py: i32) -> DragMode {
     let r = selection;
 
+    // 1) Corners first (circular grab zones)
+    if let Some(dir) = corner_hit(r, px, py) {
+        return DragMode::Resize(dir);
+    }
+
+    // 2) Edges (band hit zones)
     let left =
         (px - r.x).abs() <= HANDLE_HIT && py >= r.y - HANDLE_HIT && py <= r.y + r.h + HANDLE_HIT;
     let right = (px - (r.x + r.w)).abs() <= HANDLE_HIT
@@ -84,16 +193,12 @@ pub fn hit_test(selection: RectLocal, px: i32, py: i32) -> DragMode {
         return DragMode::Resize(dir);
     }
 
+    // 3) Inside = move
     if r.contains(px, py) {
         DragMode::Move
     } else {
-        // default drag = bottom-right resize
-        DragMode::Resize(ResizeDir {
-            left: false,
-            right: true,
-            top: false,
-            bottom: true,
-        })
+        // 4) Outside = resize nearest corner
+        DragMode::Resize(nearest_corner_dir(r, px, py))
     }
 }
 
