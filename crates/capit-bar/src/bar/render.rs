@@ -179,7 +179,7 @@ fn draw_disabled_slash_aa(buf: &mut [u8], w: i32, h: i32, x: i32, y: i32, rw: i3
 /// Xiaolin Wu anti-aliased line (ARGB over existing pixels).
 fn wu_line(buf: &mut [u8], w: i32, h: i32, mut x0: f32, mut y0: f32, mut x1: f32, mut y1: f32, argb: u32) {
     // Standard Wu needs steep handling
-    let mut steep = (y1 - y0).abs() > (x1 - x0).abs();
+    let steep = (y1 - y0).abs() > (x1 - x0).abs();
     if steep {
         std::mem::swap(&mut x0, &mut y0);
         std::mem::swap(&mut x1, &mut y1);

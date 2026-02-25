@@ -30,7 +30,12 @@ fn main() {
     debug!("log file={}", log_path.display());
 
     if let Err(e) = client::run::run(args) {
+        // log for diagnostics
         error!("fatal error: {e}");
+
+        // user-facing error (preserves real newlines)
+        eprintln!("{e}");
+
         std::process::exit(1);
     }
 }

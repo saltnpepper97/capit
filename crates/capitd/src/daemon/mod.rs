@@ -2,6 +2,7 @@
 // License: MIT
 
 pub mod handlers;
+pub mod instance_lock;
 pub mod notify;
 pub mod paths;
 pub mod server;

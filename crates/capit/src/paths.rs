@@ -7,7 +7,7 @@ pub fn default_socket_path() -> PathBuf {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp"));
-    base.join("capit.sock")
+    base.join("capit").join("capit.sock")
 }
 
 pub fn default_log_path(file: &str) -> PathBuf {

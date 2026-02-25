@@ -10,44 +10,22 @@ use std::time::Duration;
 use crate::{config, selection::SelectionState, wayland_outputs};
 use crate::config::CapitConfig;
 
+use super::instance_lock::{InstanceLock, LockError};
+
 use super::handlers::handle_request;
 use super::paths::{default_socket_path, ensure_parent_dir, output_dir_from_cfg};
 use super::session;
 use super::state::{DaemonState, UiCfg};
 
-use std::fs::OpenOptions;
 use std::os::unix::fs::FileTypeExt;
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 
 /// Check if an IpcError is a WouldBlock error (socket has no pending connections)
 fn is_would_block(e: &capit_ipc::IpcError) -> bool {
     // IpcError wraps io::Error, check if it's WouldBlock
     match e {
-        capit_ipc::IpcError::Io(io_err) => {
-            io_err.kind() == std::io::ErrorKind::WouldBlock
-        }
+        capit_ipc::IpcError::Io(io_err) => io_err.kind() == std::io::ErrorKind::WouldBlock,
         _ => false,
-    }
-}
-
-fn try_acquire_single_instance_lock(lock_path: &Path) -> std::io::Result<Option<std::fs::File>> {
-    let f = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .open(lock_path)?;
-
-    let rc = unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-
-    if rc == 0 {
-        Ok(Some(f))
-    } else {
-        let e = std::io::Error::last_os_error();
-        match e.raw_os_error() {
-            Some(libc::EWOULDBLOCK) => Ok(None),
-            _ => Err(e),
-        }
     }
 }
 
@@ -66,10 +44,6 @@ fn cleanup_stale_socket(sock: &Path) -> std::io::Result<()> {
             format!("socket path exists but is not a unix socket: {}", sock.display()),
         ))
     }
-}
-
-fn lock_path_for_socket(sock: &Path) -> PathBuf {
-    sock.with_extension("lock")
 }
 
 fn capit_dir_for_log() -> String {
@@ -91,12 +65,12 @@ pub fn run(verbose: bool) -> Result<()> {
     // Verify Wayland session is alive before starting
     if let Err(e) = session::ensure_wayland_alive() {
         warn!("not running in wayland session: {e}");
-        
+
         // Only manually print if NOT verbose (eventline already logged)
         if !verbose {
             eprintln!("capitd: not running in wayland session: {e}");
         }
-        
+
         return Ok(()); // clean exit
     }
 
@@ -123,29 +97,26 @@ pub fn run(verbose: bool) -> Result<()> {
     // ------------------------------
     // SINGLE INSTANCE GUARD
     // ------------------------------
-    let lock_path = lock_path_for_socket(&sock);
-
-    let _lock = match try_acquire_single_instance_lock(&lock_path) {
-        Ok(Some(f)) => {
-            debug!("acquired singleton lock: {}", lock_path.display());
-            f
+    let _lock = match InstanceLock::acquire_for_socket(&sock) {
+        Ok(l) => {
+            debug!("acquired singleton lock");
+            l
         }
-        Ok(None) => {
-            let msg = "another instance of capitd is already running.";
-
+        Err(e @ LockError::AlreadyRunning(_)) => {
             // Always log internally
-            warn!("{msg}");
+            warn!("{e}");
 
             // Only manually print if NOT verbose
             if !verbose {
-                eprintln!("capitd: {msg}");
+                eprintln!("capitd: {e}");
             }
 
             return Ok(()); // clean exit
         }
         Err(e) => {
-            warn!("failed to acquire lock '{}': {e}", lock_path.display());
-            return Err(e.into());
+            warn!("failed to acquire singleton lock: {e}");
+            let io_err = std::io::Error::new(std::io::ErrorKind::Other, e);
+            return Err(io_err.into());
         }
     };
 
@@ -167,7 +138,10 @@ pub fn run(verbose: bool) -> Result<()> {
     }
 
     info!("CAPIT_DIR={}", capit_dir_for_log());
-    info!("config screenshot_directory={}", state.cfg.screenshot_directory.display());
+    info!(
+        "config screenshot_directory={}",
+        state.cfg.screenshot_directory.display()
+    );
     info!("output dir={}", out_dir.display());
 
     let server = IpcServer::bind(&sock)?;
@@ -202,7 +176,7 @@ pub fn run(verbose: bool) -> Result<()> {
         }
 
         debug!("waiting for client connection...");
-        
+
         let mut conn = match server.accept() {
             Ok(c) => c,
             Err(e) if is_would_block(&e) => {
@@ -221,7 +195,7 @@ pub fn run(verbose: bool) -> Result<()> {
                 continue;
             }
         };
-        
+
         info!("client connected");
 
         let mut selection = SelectionState::new();

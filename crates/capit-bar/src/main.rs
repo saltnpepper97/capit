@@ -12,29 +12,66 @@ use capit_core::{Mode, Target};
 use capit_ipc::{Request, Response};
 use capit_ipc::protocol::UiConfig;
 
-use eventline::{debug, info, warn};
+use eventline::{debug, info};
+
+#[derive(Clone)]
+struct CliError(String);
+
+impl std::fmt::Display for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+// Make Debug match Display so Rust prints without quotes/escaped newlines.
+impl std::fmt::Debug for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl std::error::Error for CliError {}
+
+impl From<ipc::ConnectError> for CliError {
+    fn from(e: ipc::ConnectError) -> Self {
+        CliError(e.to_string())
+    }
+}
+
+// ✅ This is what you were missing: convert String errors from run_bar/start_capture.
+impl From<String> for CliError {
+    fn from(s: String) -> Self {
+        CliError(s)
+    }
+}
 
 fn default_socket_path() -> PathBuf {
     if let Ok(p) = std::env::var("CAPIT_SOCKET") {
         return PathBuf::from(p);
     }
     if let Ok(rt) = std::env::var("XDG_RUNTIME_DIR") {
-        return PathBuf::from(rt).join("capit.sock");
+        return PathBuf::from(rt).join("capit").join("capit.sock");
     }
-    PathBuf::from("/tmp").join("capit.sock")
+    PathBuf::from("/tmp").join("capit").join("capit.sock")
 }
 
 /// Ask daemon for UI config (theme/accent) so bar can match.
-fn fetch_ui_config(socket: &Path) -> Result<UiConfig, String> {
+/// If this fails, we fail fast (do not launch bar without daemon).
+fn fetch_ui_config(socket: &Path) -> Result<UiConfig, CliError> {
     let mut client = ipc::connect(socket)?;
-    let resp = client.call(Request::GetUiConfig).map_err(|e| format!("{e}"))?;
+    let resp = client
+        .call(Request::GetUiConfig)
+        .map_err(|e| CliError(format!("{e}")))?;
+
     match resp {
         Response::UiConfig { cfg } => Ok(cfg),
-        other => Err(format!("expected UiConfig response, got: {other:?}")),
+        other => Err(CliError(format!(
+            "capit-bar: expected UiConfig response, got: {other:?}"
+        ))),
     }
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), CliError> {
     // tiny arg parser: allow `--socket /path/to.sock`
     let mut args = std::env::args().skip(1);
     let mut socket: Option<PathBuf> = None;
@@ -49,22 +86,13 @@ fn main() -> Result<(), String> {
     let socket = socket.unwrap_or_else(default_socket_path);
     info!("capit-bar using socket: {}", socket.display());
 
-    let ui = match fetch_ui_config(&socket) {
-        Ok(cfg) => {
-            debug!(
-                "bar ui config: accent=0x{:08X} bg=0x{:08X}",
-                cfg.accent_colour, cfg.bar_background_colour
-            );
-            cfg
-        }
-        Err(e) => {
-            warn!("failed to fetch ui config from daemon: {e}");
-            UiConfig {
-                accent_colour: 0xFF0A_84FF,
-                bar_background_colour: 0xFF0F_1115,
-            }
-        }
-    };
+    // Fail fast if daemon isn't reachable / IPC handshake fails.
+    let ui = fetch_ui_config(&socket)?;
+
+    debug!(
+        "bar ui config: accent=0x{:08X} bg=0x{:08X}",
+        ui.accent_colour, ui.bar_background_colour
+    );
 
     loop {
         let picked = bar::run_bar(ui.accent_colour, ui.bar_background_colour)?;

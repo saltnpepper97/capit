@@ -8,10 +8,16 @@ use eventline::error;
 
 pub fn connect(socket: &Path) -> Result<IpcClient, String> {
     IpcClient::connect(socket).map_err(|e| {
+        // keep structured log for debugging
         error!("failed to connect to daemon: {e}");
+
+        // user-facing message (printed by main.rs)
         format!(
-            "Failed to connect to daemon at {}: {e}\nIs capitd running?",
-            socket.display()
+            "capit: cannot connect to capitd at {}\n\
+             → {}\n\
+             Hint: start the daemon with `capitd`.",
+            socket.display(),
+            e
         )
     })
 }

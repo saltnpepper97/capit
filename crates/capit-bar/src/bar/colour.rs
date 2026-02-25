@@ -35,27 +35,6 @@ pub(crate) fn shift_rgb(base: u32, delta: i16) -> u32 {
     argb(aa, rr, gg, bb)
 }
 
-/// Blend `base` towards `target` by `t` in [0.0, 1.0]. Keeps alpha from base.
-#[inline]
-pub(crate) fn mix_rgb(base: u32, target: u32, t: f32) -> u32 {
-    let t = t.clamp(0.0, 1.0);
-    let aa = a(base);
-
-    let br = r(base) as f32;
-    let bg = g(base) as f32;
-    let bb = b(base) as f32;
-
-    let tr = r(target) as f32;
-    let tg = g(target) as f32;
-    let tb = b(target) as f32;
-
-    let rr = (br + (tr - br) * t).round() as i32;
-    let gg = (bg + (tg - bg) * t).round() as i32;
-    let bb2 = (bb + (tb - bb) * t).round() as i32;
-
-    argb(aa, clamp_u8(rr), clamp_u8(gg), clamp_u8(bb2))
-}
-
 /// Slightly lighten a base colour. `amount` is 0..=255-ish (small numbers recommended).
 #[inline]
 pub(crate) fn lighten(base: u32, amount: u8) -> u32 {
