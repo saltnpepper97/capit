@@ -108,7 +108,7 @@ pub fn run(verbose: bool) -> Result<()> {
 
             // Only manually print if NOT verbose
             if !verbose {
-                eprintln!("capitd: {e}");
+                eprintln!("Error: {e}");
             }
 
             return Ok(()); // clean exit
