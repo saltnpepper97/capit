@@ -11,6 +11,11 @@ const CLEAR_ARGB: u32 = 0x0000_0000;
 const SHADOW_ARGB_1: u32 = 0x2A00_0000;
 const SHADOW_ARGB_2: u32 = 0x1600_0000;
 
+// Dash styling (tweak to taste)
+const DASH_LEN: i32 = 10; // pixels "on"
+const GAP_LEN: i32 = 6;   // pixels "off"
+const DASH_PHASE: i32 = 0;
+
 pub fn redraw_all(app: &mut App) -> Result<(), String> {
     // Use daemon-provided accent colour for border + handles
     let border_argb: u32 = app.accent_colour;
@@ -64,6 +69,7 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
                     && sel.y + sel.h <= buf_h + 20;
 
                 if mostly_visible {
+                    // Shadows remain solid for readability; border becomes dashed.
                     draw_border_u32(
                         buf,
                         buf_w,
@@ -89,7 +95,7 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
 
                     fill_rect_u32(buf, buf_w, buf_h, clip_x, clip_y, clip_w, clip_h, CLEAR_ARGB);
 
-                    draw_border_u32(
+                    draw_dashed_border_u32(
                         buf,
                         buf_w,
                         buf_h,
@@ -99,6 +105,9 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
                         sel.h,
                         BORDER_THICKNESS,
                         border_argb,
+                        DASH_LEN,
+                        GAP_LEN,
+                        DASH_PHASE,
                     );
 
                     soften_corners(buf, buf_w, buf_h, sel, BG_DIM_ARGB);
@@ -113,7 +122,7 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
                 } else {
                     fill_rect_u32(buf, buf_w, buf_h, clip_x, clip_y, clip_w, clip_h, CLEAR_ARGB);
 
-                    draw_border_u32(
+                    draw_dashed_border_u32(
                         buf,
                         buf_w,
                         buf_h,
@@ -123,6 +132,9 @@ pub fn redraw_all(app: &mut App) -> Result<(), String> {
                         sel.h,
                         BORDER_THICKNESS,
                         border_argb,
+                        DASH_LEN,
+                        GAP_LEN,
+                        DASH_PHASE,
                     );
                 }
             }

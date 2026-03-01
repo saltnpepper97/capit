@@ -57,6 +57,124 @@ pub fn draw_border_u32(
     fill_rect_u32(buf, w, h, x + rw - t, y, t, rh, argb);
 }
 
+/// Draw a dashed border rectangle.
+///
+/// - `dash_len` and `gap_len` are in pixels.
+/// - `phase` shifts the pattern along the perimeter (can be animated later).
+/// - Uses simple rectangular segments (fast), no anti-aliasing.
+pub fn draw_dashed_border_u32(
+    buf: &mut [u8],
+    w: i32,
+    h: i32,
+    x: i32,
+    y: i32,
+    rw: i32,
+    rh: i32,
+    t: i32,
+    argb: u32,
+    dash_len: i32,
+    gap_len: i32,
+    phase: i32,
+) {
+    if rw <= 0 || rh <= 0 || t <= 0 {
+        return;
+    }
+    if dash_len <= 0 {
+        // fallback to solid
+        draw_border_u32(buf, w, h, x, y, rw, rh, t, argb);
+        return;
+    }
+    let gap = gap_len.max(0);
+    let period = dash_len + gap;
+    if period <= 0 {
+        draw_border_u32(buf, w, h, x, y, rw, rh, t, argb);
+        return;
+    }
+
+    // The "run" lengths along each side where dashes live.
+    // We include the full span (including corners) for a crisp box look.
+    let top_len = rw;
+    let right_len = rh;
+    let bottom_len = rw;
+    let left_len = rh;
+
+    // Normalize phase into [0, period)
+    let mut p = phase % period;
+    if p < 0 {
+        p += period;
+    }
+
+    // Helper: fill a 1D dashed line mapped to rect segments.
+    // `emit(seg_start, seg_len)` is called for each dash segment in [0, line_len).
+    fn dashed_segments<F: FnMut(i32, i32)>(
+        line_len: i32,
+        dash_len: i32,
+        gap_len: i32,
+        phase: i32,
+        mut emit: F,
+    ) {
+        if line_len <= 0 {
+            return;
+        }
+        let gap = gap_len.max(0);
+        let period = dash_len + gap;
+        if period <= 0 {
+            emit(0, line_len);
+            return;
+        }
+
+        // We iterate "pattern time" along the line.
+        // Start at -phase so phase shifts the pattern forward.
+        let mut pos = -phase;
+
+        // Bring pos into a range where we can begin emitting segments
+        // without missing any that intersect [0, line_len).
+        // We just step forward until pos + dash/gap spans past 0.
+        while pos + period < 0 {
+            pos += period;
+        }
+
+        while pos < line_len {
+            let dash_start = pos.max(0);
+            let dash_end = (pos + dash_len).min(line_len);
+            if dash_end > dash_start {
+                emit(dash_start, dash_end - dash_start);
+            }
+            pos += period;
+        }
+    }
+
+    // TOP: left->right at y
+    dashed_segments(top_len, dash_len, gap, p, |sx, slen| {
+        fill_rect_u32(buf, w, h, x + sx, y, slen, t, argb);
+    });
+
+    // RIGHT: top->bottom at x+rw-t (thickness inward)
+    // Advance phase by top_len so pattern continues around the perimeter.
+    let p_right = (p + top_len).rem_euclid(period);
+    dashed_segments(right_len, dash_len, gap, p_right, |sy, slen| {
+        fill_rect_u32(buf, w, h, x + rw - t, y + sy, t, slen, argb);
+    });
+
+    // BOTTOM: right->left at y+rh-t
+    // We keep continuity by advancing phase by top_len + right_len,
+    // but draw direction reversed by mapping segment positions.
+    let p_bottom = (p + top_len + right_len).rem_euclid(period);
+    dashed_segments(bottom_len, dash_len, gap, p_bottom, |sx, slen| {
+        // sx is from 0..rw left->right; bottom runs right->left, so invert.
+        let inv_start = (bottom_len - (sx + slen)).max(0);
+        fill_rect_u32(buf, w, h, x + inv_start, y + rh - t, slen, t, argb);
+    });
+
+    // LEFT: bottom->top at x
+    let p_left = (p + top_len + right_len + bottom_len).rem_euclid(period);
+    dashed_segments(left_len, dash_len, gap, p_left, |sy, slen| {
+        // sy is from 0..rh top->bottom; left runs bottom->top, so invert.
+        let inv_start = (left_len - (sy + slen)).max(0);
+        fill_rect_u32(buf, w, h, x, y + inv_start, t, slen, argb);
+    });
+}
+
 pub fn soften_corners(buf: &mut [u8], w: i32, h: i32, r: RectLocal, bg: u32) {
     fill_rect_u32(buf, w, h, r.x, r.y, 2, 1, bg);
     fill_rect_u32(buf, w, h, r.x, r.y + 1, 1, 1, bg);

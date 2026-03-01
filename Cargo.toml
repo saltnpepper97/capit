@@ -7,4 +7,13 @@ members = [
     "crates/capit",
 ]
 
+[profile.release]
+opt-level = "z"        # or "s" if z slows too much
+lto = "fat"            # try "thin" if build time hurts
+codegen-units = 1
+panic = "abort"
+strip = "symbols"      # nightly not required anymore on stable
+debug = 0
+incremental = false
+
 resolver = "2"
